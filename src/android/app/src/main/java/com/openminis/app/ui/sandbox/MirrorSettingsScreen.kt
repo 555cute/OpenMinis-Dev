@@ -424,7 +424,7 @@ object MirrorSpeedTestViewModel {
         useCustomMirror[category] == true && selectedMirrorId[category] != null
 
     private fun rootfsDataDir(context: Context): File =
-        File(context.applicationContext.filesDir, "alpine-rootfs")
+        File(context.applicationContext.filesDir, "alpine-rootfs1")
 
     private fun applyMirror(context: Context, category: MirrorCategory) {
         val mirror = selectedMirror(category) ?: return

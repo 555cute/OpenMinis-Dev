@@ -29,6 +29,7 @@ object AppIconRepository {
     private const val TAG = "AppIconRepository"
     private const val PREFS = "app_icon_prefs"
     private const val KEY_SELECTED_ID = "selected_icon_id"
+    // Manifest-relative component class names resolve against the Kotlin namespace.
     private const val PACKAGE_NAME = "com.openminis.app"
 
     enum class Variant(val id: String, val aliasClass: String) {
