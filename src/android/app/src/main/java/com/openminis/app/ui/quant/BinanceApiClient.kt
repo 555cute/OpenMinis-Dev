@@ -145,6 +145,7 @@ class BinanceApiClient {
         execute(request)
     }
 
+    fun userStreamUrl(product: BinanceProduct, mode: TradingMode, listenKey: String): String = when (product) {
         BinanceProduct.SPOT -> if (mode == TradingMode.DEMO) "wss://demo-stream.binance.com/ws/$listenKey" else "wss://stream.binance.com/ws/$listenKey"
         BinanceProduct.USD_M_FUTURES -> if (mode == TradingMode.DEMO) "wss://demo-fstream.binance.com/ws/$listenKey" else "wss://fstream.binance.com/ws/$listenKey"
     }
