@@ -25,7 +25,18 @@ class BinanceQuantStreamController(
         socket = client.webSocket(host + stream, object : WebSocketListener() {
             override fun onMessage(webSocket: WebSocket, text: String) {
                 val event = runCatching { JSONObject(text) }.getOrNull() ?: return
-                if (event.optString("e") == "24hrTicker") BinanceQuantEvents.emit("market_tick")
+                if (event.optString("e") == "24hrTicker") {
+                    BinanceQuantEvents.emitMarketTick(
+                        BinanceMarketTick(
+                            symbol = event.optString("s"),
+                            price = event.optString("c").toDoubleOrNull() ?: return,
+                            changePercent = event.optString("P").toDoubleOrNull() ?: 0.0,
+                            quoteVolume = event.optString("q").toDoubleOrNull() ?: 0.0,
+                            eventTime = event.optLong("E"),
+                        ),
+                    )
+                    BinanceQuantEvents.emit("market_tick")
+                }
             }
             override fun onMessage(webSocket: WebSocket, bytes: ByteString) = onMessage(webSocket, bytes.utf8())
             override fun onFailure(webSocket: WebSocket, t: Throwable, response: okhttp3.Response?) { socket = null }

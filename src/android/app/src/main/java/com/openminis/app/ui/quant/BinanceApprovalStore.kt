@@ -59,7 +59,19 @@ object BinanceApprovalStore {
     }
 }
 
+data class BinanceMarketTick(
+    val symbol: String,
+    val price: Double,
+    val changePercent: Double,
+    val quoteVolume: Double,
+    val eventTime: Long,
+)
+
 object BinanceQuantEvents {
+    private val _marketTicks = MutableSharedFlow<BinanceMarketTick>(extraBufferCapacity = 128)
+    val marketTicks: SharedFlow<BinanceMarketTick> = _marketTicks.asSharedFlow()
+    fun emitMarketTick(tick: BinanceMarketTick) { _marketTicks.tryEmit(tick) }
+
     private val _events = MutableSharedFlow<String>(extraBufferCapacity = 32)
     val events: SharedFlow<String> = _events.asSharedFlow()
     fun emit(event: String) { _events.tryEmit(event) }
