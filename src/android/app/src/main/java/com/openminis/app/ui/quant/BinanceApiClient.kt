@@ -233,8 +233,8 @@ class BinanceApiClient {
         credentials: BinanceCredentials,
     ): List<BinancePosition> {
         if (product != BinanceProduct.USD_M_FUTURES) return emptyList()
-        val json = JSONObject(signedJsonPayload(product, mode, positionRiskPath(product), credentials, emptyList()))
-        val positions = json.optJSONArray("positions") ?: JSONArray()
+        val payload = signedJsonPayload(product, mode, positionRiskPath(product), credentials, emptyList())
+        val positions = JSONArray(payload)
         return buildList {
             for (index in 0 until positions.length()) {
                 val item = positions.getJSONObject(index)
