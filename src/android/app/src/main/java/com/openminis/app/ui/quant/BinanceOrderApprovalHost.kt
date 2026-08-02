@@ -57,7 +57,7 @@ fun BinanceOrderApprovalHost() {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Icon(Icons.Default.WarningAmber, contentDescription = null, tint = ApprovalRed)
                 Spacer(Modifier.width(10.dp))
-                Text("确认提交 Binance 订单", fontSize = 20.sp, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
+                Text(if (request.action == BinanceWriteAction.CANCEL_ORDER) "确认撤销 Binance 订单" else "确认提交 Binance 订单", fontSize = 20.sp, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
                 IconButton(onClick = { BinanceApprovalStore.reject(request.id) }) {
                     Icon(Icons.Default.Close, contentDescription = "关闭")
                 }
@@ -68,6 +68,7 @@ fun BinanceOrderApprovalHost() {
                     ApprovalLine("产品", request.product.label)
                     ApprovalLine("环境", if (request.mode == TradingMode.LIVE) "LIVE 正式盘" else "DEMO 模拟盘")
                     ApprovalLine("交易对", request.order.symbol)
+                    ApprovalLine("订单 ID", request.orderId ?: "--")
                     ApprovalLine("方向", request.order.side)
                     ApprovalLine("类型", request.order.type)
                     ApprovalLine("数量", request.order.quantity)
@@ -75,11 +76,7 @@ fun BinanceOrderApprovalHost() {
                 }
             }
             Spacer(Modifier.size(10.dp))
-            if (request.mode == TradingMode.LIVE) {
-                Text("这是正式盘订单，可能导致真实资金变动。请确认交易对、方向、数量和价格。", color = ApprovalRed, fontSize = 12.sp, lineHeight = 18.sp)
-            } else {
-                Text("Demo 订单只会发送到 Binance Demo Trading 环境。", color = Color(0xFF707A8A), fontSize = 12.sp)
-            }
+                Text(if (request.action == BinanceWriteAction.CANCEL_ORDER) "撤单操作不会重新开仓，但会改变当前挂单状态。" else if (request.mode == TradingMode.LIVE) "这是正式盘订单，可能导致真实资金变动。请确认交易对、方向、数量和价格。" else "Demo 订单只会发送到 Binance Demo Trading 环境。", color = if (request.mode == TradingMode.LIVE) ApprovalRed else Color(0xFF707A8A), fontSize = 12.sp, lineHeight = 18.sp)
             Spacer(Modifier.size(14.dp))
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 TextButton(onClick = { BinanceApprovalStore.reject(request.id) }, modifier = Modifier.weight(1f)) {
@@ -90,7 +87,7 @@ fun BinanceOrderApprovalHost() {
                     modifier = Modifier.weight(1f),
                     colors = ButtonDefaults.buttonColors(containerColor = if (request.mode == TradingMode.LIVE) ApprovalRed else ApprovalYellow, contentColor = if (request.mode == TradingMode.LIVE) Color.White else ApprovalInk),
                     shape = RoundedCornerShape(12.dp),
-                ) { Text("确认发送", fontWeight = FontWeight.Bold) }
+                ) { Text(if (request.action == BinanceWriteAction.CANCEL_ORDER) "确认撤销" else "确认发送", fontWeight = FontWeight.Bold) }
             }
             Spacer(Modifier.size(10.dp))
         }

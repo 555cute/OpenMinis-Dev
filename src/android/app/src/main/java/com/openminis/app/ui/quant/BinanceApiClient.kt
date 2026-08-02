@@ -8,6 +8,8 @@ import kotlinx.coroutines.withContext
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
+import okhttp3.WebSocket
+import okhttp3.WebSocketListener
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.IOException
@@ -58,6 +60,16 @@ data class BinanceOrderBook(
     val asks: List<BinanceOrderBookLevel>,
 )
 
+data class BinanceExchangeFilters(
+    val minQty: Double? = null,
+    val maxQty: Double? = null,
+    val stepSize: Double? = null,
+    val minNotional: Double? = null,
+    val maxNotional: Double? = null,
+    val tickSize: Double? = null,
+    val minPrice: Double? = null,
+    val maxPrice: Double? = null,
+)
 data class BinanceOrderRequest(
     val symbol: String,
     val side: String,
@@ -112,6 +124,26 @@ class BinanceApiClient {
         .writeTimeout(12, java.util.concurrent.TimeUnit.SECONDS)
         .build()
 
+    fun webSocket(url: String, listener: WebSocketListener): WebSocket =
+        http.newWebSocket(Request.Builder().url(url).build(), listener)
+
+    suspend fun createListenKey(product: BinanceProduct, mode: TradingMode, credentials: BinanceCredentials): String {
+        val path = if (product == BinanceProduct.SPOT) "/api/v3/userDataStream" else "/fapi/v1/listenKey"
+        val request = Request.Builder().url(baseUrl(product, mode) + path).header("X-MBX-APIKEY", credentials.apiKey).post(ByteArray(0).toRequestBody()).build()
+        return JSONObject(execute(request)).getString("listenKey")
+    }
+
+    suspend fun closeListenKey(product: BinanceProduct, mode: TradingMode, credentials: BinanceCredentials, listenKey: String) {
+        val path = if (product == BinanceProduct.SPOT) "/api/v3/userDataStream" else "/fapi/v1/listenKey"
+        val request = Request.Builder().url(baseUrl(product, mode) + path + "?listenKey=" + urlEncode(listenKey)).header("X-MBX-APIKEY", credentials.apiKey).delete().build()
+        execute(request)
+    }
+
+    fun userStreamUrl(product: BinanceProduct, mode: TradingMode, listenKey: String): String = when (product) {
+        BinanceProduct.SPOT -> if (mode == TradingMode.DEMO) "wss://demo-stream.binance.com/ws/$listenKey" else "wss://stream.binance.com/ws/$listenKey"
+        BinanceProduct.USD_M_FUTURES -> if (mode == TradingMode.DEMO) "wss://demo-fstream.binance.com/ws/$listenKey" else "wss://fstream.binance.com/ws/$listenKey"
+    }
+
     suspend fun load24hTickers(
         product: BinanceProduct,
         mode: TradingMode,
@@ -149,6 +181,61 @@ class BinanceApiClient {
                 )
             }
         }.awaitAll().sortedBy { it.symbol }
+    }
+
+    suspend fun loadExchangeFilters(
+        product: BinanceProduct,
+        mode: TradingMode,
+        symbol: String,
+    ): BinanceExchangeFilters {
+        val json = getJsonObject(product, mode, exchangeInfoPath(product), listOf("symbol" to symbol))
+        val symbols = json.optJSONArray("symbols") ?: JSONArray()
+        val item = if (symbols.length() > 0) symbols.getJSONObject(0) else throw BinanceApiException(200, null, "Symbol not found: $symbol")
+        val filters = item.optJSONArray("filters") ?: JSONArray()
+        var result = BinanceExchangeFilters()
+        for (index in 0 until filters.length()) {
+            val filter = filters.getJSONObject(index)
+            result = when (filter.optString("filterType")) {
+                "LOT_SIZE", "MARKET_LOT_SIZE" -> result.copy(
+                    minQty = filter.optString("minQty").toDoubleOrNull() ?: result.minQty,
+                    maxQty = filter.optString("maxQty").toDoubleOrNull() ?: result.maxQty,
+                    stepSize = filter.optString("stepSize").toDoubleOrNull() ?: result.stepSize,
+                )
+                "MIN_NOTIONAL", "NOTIONAL" -> result.copy(
+                    minNotional = filter.optString("minNotional").toDoubleOrNull() ?: result.minNotional,
+                    maxNotional = filter.optString("maxNotional").toDoubleOrNull() ?: result.maxNotional,
+                )
+                "PRICE_FILTER" -> result.copy(
+                    tickSize = filter.optString("tickSize").toDoubleOrNull() ?: result.tickSize,
+                    minPrice = filter.optString("minPrice").toDoubleOrNull() ?: result.minPrice,
+                    maxPrice = filter.optString("maxPrice").toDoubleOrNull() ?: result.maxPrice,
+                )
+                else -> result
+            }
+        }
+        return result
+    }
+
+    fun validateOrderFilters(order: BinanceOrderRequest, filters: BinanceExchangeFilters, referencePrice: Double? = null) {
+        val quantity = order.quantity.toDoubleOrNull() ?: throw BinanceApiException(0, null, "Quantity must be numeric")
+        val price = order.price?.toDoubleOrNull() ?: referencePrice
+        filters.minQty?.let { if (quantity < it) throw BinanceApiException(0, null, "Quantity $quantity is below minQty $it") }
+        filters.maxQty?.let { if (quantity > it) throw BinanceApiException(0, null, "Quantity $quantity exceeds maxQty $it") }
+        filters.stepSize?.takeIf { it > 0 }?.let { step ->
+            val steps = quantity / step
+            if (kotlin.math.abs(steps - kotlin.math.round(steps)) > 1e-8) throw BinanceApiException(0, null, "Quantity does not match stepSize $step")
+        }
+        if (price != null) {
+            filters.minPrice?.let { if (price < it) throw BinanceApiException(0, null, "Price $price is below minPrice $it") }
+            filters.maxPrice?.let { if (price > it) throw BinanceApiException(0, null, "Price $price exceeds maxPrice $it") }
+            filters.tickSize?.takeIf { it > 0 }?.let { tick ->
+                val steps = price / tick
+                if (kotlin.math.abs(steps - kotlin.math.round(steps)) > 1e-8) throw BinanceApiException(0, null, "Price does not match tickSize $tick")
+            }
+            val notional = quantity * price
+            filters.minNotional?.let { if (notional < it) throw BinanceApiException(0, null, "Order notional $notional is below minNotional $it") }
+            filters.maxNotional?.let { if (notional > it) throw BinanceApiException(0, null, "Order notional $notional exceeds maxNotional $it") }
+        }
     }
 
     suspend fun loadOrderBook(
@@ -467,6 +554,7 @@ class BinanceApiClient {
     }
 
     private fun tickerPath(product: BinanceProduct) = if (product == BinanceProduct.SPOT) "/api/v3/ticker/24hr" else "/fapi/v1/ticker/24hr"
+    private fun exchangeInfoPath(product: BinanceProduct) = if (product == BinanceProduct.SPOT) "/api/v3/exchangeInfo" else "/fapi/v1/exchangeInfo"
     private fun depthPath(product: BinanceProduct) = if (product == BinanceProduct.SPOT) "/api/v3/depth" else "/fapi/v1/depth"
     private fun klinesPath(product: BinanceProduct) = if (product == BinanceProduct.SPOT) "/api/v3/klines" else "/fapi/v1/klines"
     private fun accountPath(product: BinanceProduct) = if (product == BinanceProduct.SPOT) "/api/v3/account" else "/fapi/v3/account"

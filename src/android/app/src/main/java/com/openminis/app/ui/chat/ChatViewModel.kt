@@ -63,6 +63,9 @@ import com.openminis.app.ui.quant.BinanceAgentContext
 import com.openminis.app.ui.quant.BinanceCredentialStore
 import com.openminis.app.ui.quant.BinanceCredentials
 import com.openminis.app.ui.quant.BinanceOrderRequest
+import com.openminis.app.ui.quant.BinanceOrderRecord
+import com.openminis.app.ui.quant.BinanceOrderStore
+import com.openminis.app.ui.quant.BinanceRiskGuard
 import com.openminis.app.ui.quant.BinanceProduct
 import com.openminis.app.ui.quant.BinanceStrategy
 import com.openminis.app.ui.quant.BinanceStrategyAlarmManager
@@ -7164,9 +7167,11 @@ class ChatViewModel(
             "binance_account" -> executeBinanceAccountTool(argsJson)
             "binance_order_book" -> executeBinanceOrderBookTool(argsJson)
             "binance_place_order" -> executeBinancePlaceOrderTool(argsJson)
+            "binance_cancel_order" -> executeBinanceCancelOrderTool(argsJson)
             "binance_strategy_list" -> executeBinanceStrategyListTool(argsJson)
             "binance_strategy_create" -> executeBinanceStrategyCreateTool(argsJson)
             "binance_strategy_set_enabled" -> executeBinanceStrategySetEnabledTool(argsJson)
+            "binance_order_history" -> executeBinanceOrderHistoryTool(argsJson)
             else -> ToolExecutionResult("Unknown tool: $name", false)
         }
     }
@@ -7208,6 +7213,7 @@ class ChatViewModel(
             val account = client.loadAccount(product, mode, credentials, tickers)
             val positions = if (product == BinanceProduct.USD_M_FUTURES) client.loadPositions(product, mode, credentials) else emptyList()
             val openOrders = client.loadOpenOrders(product, mode, credentials)
+            BinanceOrderStore.ensureObservedOrders(context, openOrders, product, mode)
             val output = buildString {
                 append("Binance ${product.label} ${mode.label} account:\n")
                 append("- canTrade=${account.canTrade}\n")
@@ -7280,11 +7286,34 @@ class ChatViewModel(
             }
             val credentials = BinanceCredentialStore.load(context, product, mode)
                 ?: return ToolExecutionResult("Binance API is not configured for ${product.label}/${mode.label}", false, toolTitle = "binance_place_order")
+            val referencePrice = runCatching {
+                BinanceApiClient().load24hTickers(product, mode, listOf(order.symbol)).firstOrNull()?.price
+            }.getOrNull()
+            val filters = BinanceApiClient().loadExchangeFilters(product, mode, order.symbol)
+            BinanceApiClient().validateOrderFilters(order, filters, referencePrice)
+            BinanceRiskGuard.validateOrder(context, product, mode, order, referencePrice)
             val approved = BinanceApprovalStore.awaitOrderApproval(product, mode, order)
             if (!approved) {
                 return ToolExecutionResult("Order was not sent: human approval was rejected or timed out.", false, toolTitle = "binance_place_order")
             }
             val result = BinanceApiClient().placeOrder(product, mode, credentials, order)
+            BinanceOrderStore.record(
+                context,
+                BinanceOrderRecord(
+                    product = product,
+                    mode = mode,
+                    symbol = order.symbol,
+                    orderId = result.orderId,
+                    side = order.side,
+                    type = order.type,
+                    status = result.status,
+                    quantity = order.quantity.toDoubleOrNull() ?: 0.0,
+                    executedQuantity = result.executedQuantity,
+                    price = order.price?.toDoubleOrNull(),
+                    avgPrice = result.avgPrice,
+                    source = "agent",
+                ),
+            )
             BinanceQuantEvents.emit("order_submitted")
             ToolExecutionResult(
                 "Binance order accepted: orderId=${result.orderId}, status=${result.status}, executedQty=${result.executedQuantity}, avgPrice=${result.avgPrice}",
@@ -7293,6 +7322,31 @@ class ChatViewModel(
             )
         } catch (error: Throwable) {
             ToolExecutionResult("Binance order failed: ${binanceToolError(error)}", false, toolTitle = "binance_place_order")
+        }
+    }
+
+    private suspend fun executeBinanceCancelOrderTool(argsJson: String): ToolExecutionResult {
+        return try {
+            val args = JSONObject(argsJson)
+            val product = parseBinanceProduct(args.optString("product"))
+            val mode = parseTradingMode(args.optString("mode"))
+            val symbol = args.optString("symbol").trim().uppercase()
+            val orderId = args.optString("order_id").trim()
+            if (symbol.isBlank() || orderId.isBlank()) return ToolExecutionResult("symbol and order_id are required", false, toolTitle = "binance_cancel_order")
+            val credentials = BinanceCredentialStore.load(context, product, mode)
+                ?: return ToolExecutionResult("Binance API is not configured for ${product.label}/${mode.label}", false, toolTitle = "binance_cancel_order")
+            if (!BinanceApprovalStore.awaitCancelApproval(product, mode, symbol, orderId)) {
+                return ToolExecutionResult("Cancel was not sent: human approval was rejected or timed out.", false, toolTitle = "binance_cancel_order")
+            }
+            val result = BinanceApiClient().cancelOrder(product, mode, credentials, symbol, orderId)
+            BinanceOrderStore.record(
+                context,
+                BinanceOrderRecord(product = product, mode = mode, symbol = symbol, orderId = result.orderId, side = "", type = "CANCEL", status = result.status, quantity = 0.0, executedQuantity = result.executedQuantity, source = "agent"),
+            )
+            BinanceQuantEvents.emit("order_cancelled")
+            ToolExecutionResult("Binance cancel accepted: orderId=${result.orderId}, status=${result.status}", true, toolTitle = args.optString("tool_title", "撤销币安订单"))
+        } catch (error: Throwable) {
+            ToolExecutionResult("Binance cancel failed: ${binanceToolError(error)}", false, toolTitle = "binance_cancel_order")
         }
     }
 
@@ -7306,12 +7360,36 @@ class ChatViewModel(
                 append("Binance strategies ${product.label}/${mode.label}:\n")
                 if (rows.isEmpty()) append("(none)\n")
                 rows.forEach { strategy ->
-                    append("- id=${strategy.id}, name=${strategy.name}, symbol=${strategy.symbol}, kind=${strategy.kind.label}, enabled=${strategy.enabled}, signalOnly=${strategy.signalOnly}, lastSignal=${strategy.lastSignal}, lastPrice=${strategy.lastPrice}, lastRunAt=${strategy.lastRunAt}\n")
+                    append("- id=${strategy.id}, name=${strategy.name}, symbol=${strategy.symbol}, kind=${strategy.kind.label}, enabled=${strategy.enabled}, signalOnly=${strategy.signalOnly}, lastSignal=${strategy.lastSignal}, lastPrice=${strategy.lastPrice}, lastRunAt=${strategy.lastRunAt}, signalCount=${strategy.signalCount}, realizedPnlUsdt=${strategy.totalRealizedPnlUsdt}\n")
                 }
             }
             ToolExecutionResult(output.trimEnd(), true, toolTitle = args.optString("tool_title", "查看量化策略"))
         } catch (error: Throwable) {
             ToolExecutionResult("Binance strategy list failed: ${binanceToolError(error)}", false, toolTitle = "binance_strategy_list")
+        }
+    }
+
+    private suspend fun executeBinanceOrderHistoryTool(argsJson: String): ToolExecutionResult {
+        return try {
+            val args = JSONObject(argsJson)
+            val limit = args.optInt("limit", 30).coerceIn(1, 100)
+            val orders = BinanceOrderStore.orders(context).take(limit)
+            val fills = BinanceOrderStore.fills(context).take(limit)
+            val output = buildString {
+                append("Observed Binance order audit:\n")
+                if (orders.isEmpty()) append("orders: (none)\n")
+                orders.forEach { order ->
+                    append("- order ${order.orderId ?: order.id}: ${order.product.label}/${order.mode.label} ${order.symbol} ${order.side} ${order.type} status=${order.status} qty=${order.executedQuantity}/${order.quantity} avgPrice=${order.avgPrice}\n")
+                }
+                append("Observed fills: ${fills.size}\n")
+                fills.take(20).forEach { fill ->
+                    append("- fill ${fill.id}: ${fill.symbol} price=${fill.price} qty=${fill.quantity} commission=${fill.commission} ${fill.commissionAsset}\n")
+                }
+                append("dailyRealizedPnlUsdt=${BinanceOrderStore.dailyRealizedPnl(context)}")
+            }
+            ToolExecutionResult(output, true, toolTitle = args.optString("tool_title", "查看订单历史"))
+        } catch (error: Throwable) {
+            ToolExecutionResult("Binance order history failed: ${binanceToolError(error)}", false, toolTitle = "binance_order_history")
         }
     }
 
@@ -8222,7 +8300,13 @@ Operating rules:
 - Never invent prices, balances, positions, order status, fills, PnL or strategy results. If a Binance request fails, report the exact failure.
 - API secrets are hidden from you and stay inside the app. Never ask the user to paste an API Secret into chat or shell.
 - Read market, account and order-book data before making a recommendation about current conditions.
-- binance_place_order always requires visible Android approval. A rejected or timed-out result means no order was sent.
+- `binance_market`: read real-time ticker and recent klines;
+- `binance_account`: read balances, positions and open orders;
+- `binance_order_book`: read current bids and asks;
+- `binance_place_order`: prepare and approve a Spot/Futures order;
+- `binance_cancel_order`: prepare and approve a cancel request;
+- `binance_order_history`: read observed order/fill history;
+- `binance_strategy_list/create/set_enabled`: manage persisted signal monitors;
 - Demo is the default. Treat LIVE as real-money execution and state product, environment, symbol, side, type, quantity and price before approval.
 - Do not claim to have started a background trading robot. Strategy automation must be explicitly configured and its actual status must come from the app.
 

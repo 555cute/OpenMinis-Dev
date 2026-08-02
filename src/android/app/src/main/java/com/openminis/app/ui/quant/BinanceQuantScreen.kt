@@ -40,6 +40,7 @@ import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.GridView
+import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.Key
 import androidx.compose.material.icons.filled.MoreHoriz
@@ -116,7 +117,6 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.platform.LocalContext
-import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 import java.util.Locale
@@ -195,6 +195,7 @@ fun BinanceQuantScreen(
     var menuExpanded by remember { mutableStateOf(false) }
     var strategyVersion by remember { mutableIntStateOf(0) }
     var showStrategySheet by remember { mutableStateOf(false) }
+    var showHistorySheet by remember { mutableStateOf(false) }
     val snackbarHostState = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
 
@@ -207,8 +208,32 @@ fun BinanceQuantScreen(
     val strategies = remember(context, strategyVersion, product, mode) {
         BinanceStrategyStore.list(context).filter { it.product == product && it.mode == mode }
     }
+    val selectedTicker = tickers.firstOrNull { it.symbol == selectedSymbol }
+        ?: tickers.firstOrNull()
+
+    val userStream = remember(credentials, product, mode) {
+        credentials?.let { BinanceUserDataStream(context, product, mode, it, client) }
+    }
+    androidx.compose.runtime.DisposableEffect(userStream) {
+        val job = userStream?.let { stream -> scope.launch { runCatching { stream.start() } } }
+        onDispose {
+            job?.cancel()
+            scope.launch { userStream?.stop() }
+        }
+    }
 
     BinanceAgentContext.update(product, mode, selectedSymbol)
+    val streamController = remember { BinanceQuantStreamController(context) }
+    androidx.compose.runtime.DisposableEffect(product, mode, selectedSymbol) {
+        val job = scope.launch {
+            streamController.startMarket(selectedSymbol, product, mode)
+        }
+        onDispose {
+            job.cancel()
+            scope.launch { streamController.stop() }
+        }
+    }
+
     LaunchedEffect(Unit) {
         BinanceQuantEvents.events.collectLatest {
             refreshKey++
@@ -257,6 +282,7 @@ fun BinanceQuantScreen(
         )
     }
 
+    if (showCredentialSheet) {
         BinanceCredentialSheet(
             context = context,
             client = client,
@@ -269,6 +295,13 @@ fun BinanceQuantScreen(
                 refreshKey++
                 showCredentialSheet = false
             },
+        )
+    }
+
+    if (showHistorySheet) {
+        BinanceOrderHistorySheet(
+            context = context,
+            onDismiss = { showHistorySheet = false },
         )
     }
 
@@ -307,6 +340,7 @@ fun BinanceQuantScreen(
                 onCredentialsClick = { showCredentialSheet = true },
                 onSettingsClick = onSettingsClick,
                 onAgentClick = onAgentClick,
+                onHistoryClick = { showHistorySheet = true },
             )
 
             when (tab) {
@@ -399,7 +433,7 @@ fun BinanceQuantScreen(
 }
 
 @Composable
-    private fun QuantHeader(
+private fun QuantHeader(
     colors: QuantColors,
     product: BinanceProduct,
     mode: TradingMode,
@@ -411,6 +445,7 @@ fun BinanceQuantScreen(
     onCredentialsClick: () -> Unit,
     onSettingsClick: () -> Unit,
     onAgentClick: () -> Unit,
+    onHistoryClick: () -> Unit,
 ) {
     var menuExpanded by remember { mutableStateOf(false) }
     Column(Modifier.fillMaxWidth().padding(horizontal = 18.dp, vertical = 10.dp)) {
@@ -445,6 +480,11 @@ fun BinanceQuantScreen(
                         text = { Text("AI 助手") },
                         leadingIcon = { Icon(Icons.Default.AutoGraph, null) },
                         onClick = { menuExpanded = false; onAgentClick() },
+                    )
+                    DropdownMenuItem(
+                        text = { Text("订单与成交历史") },
+                        leadingIcon = { Icon(Icons.Default.History, null) },
+                        onClick = { menuExpanded = false; onHistoryClick() },
                     )
                     DropdownMenuItem(
                         text = { Text("应用设置") },
@@ -849,6 +889,7 @@ private fun TradePanel(
     var confirmOrder by remember { mutableStateOf(false) }
     var submitting by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
+    val appContext = LocalContext.current.applicationContext
     val isBuy = side == "买入"
     val actionColor = if (isBuy) BinanceGreen else BinanceRed
 
@@ -883,18 +924,21 @@ private fun TradePanel(
                             try {
                                 if (credentials == null) error("请先配置 API Key 和 Secret")
                                 if (quantity.toDoubleOrNull()?.let { it > 0 } != true) error("请输入有效数量")
-                                val result = client.placeOrder(
-                                    product,
-                                    mode,
-                                    credentials,
-                                    BinanceOrderRequest(
-                                        symbol = ticker.symbol,
-                                        side = if (isBuy) "BUY" else "SELL",
-                                        type = if (orderType == "市价") "MARKET" else "LIMIT",
-                                        quantity = quantity,
-                                        price = price.takeIf { orderType != "市价" },
-                                    ),
+                                val request = BinanceOrderRequest(
+                                    symbol = ticker.symbol,
+                                    side = if (isBuy) "BUY" else "SELL",
+                                    type = if (orderType == "市价") "MARKET" else "LIMIT",
+                                    quantity = quantity,
+                                    price = price.takeIf { orderType != "市价" },
                                 )
+                                val referencePrice = ticker.price
+                                val filters = client.loadExchangeFilters(product, mode, ticker.symbol)
+                                client.validateOrderFilters(request, filters, referencePrice)
+                                BinanceRiskGuard.validateOrder(context = appContext, product = product, mode = mode, order = request, referencePrice = referencePrice)
+                                if (!BinanceApprovalStore.awaitOrderApproval(product, mode, request)) error("用户拒绝或超时，订单未发送")
+                                val result = client.placeOrder(product, mode, credentials, request)
+                                BinanceOrderStore.record(appContext, BinanceOrderRecord(product = product, mode = mode, symbol = ticker.symbol, orderId = result.orderId, side = request.side, type = request.type, status = result.status, quantity = quantity.toDouble(), executedQuantity = result.executedQuantity, price = request.price?.toDoubleOrNull(), avgPrice = result.avgPrice, source = "ui"))
+                                BinanceQuantEvents.emit("order_submitted")
                                 onOrderSubmitted("订单已提交：${result.orderId} · ${result.status}")
                             } catch (error: Throwable) {
                                 onOrderSubmitted("下单失败：${apiErrorText(error)}")

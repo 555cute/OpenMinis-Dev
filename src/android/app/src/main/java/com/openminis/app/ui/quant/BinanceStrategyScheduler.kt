@@ -37,9 +37,8 @@ class BinanceStrategyScheduler(private val context: Context) {
         }.getOrNull()
         val price = ticker?.price
         val signal = evaluateSignal(strategy, price)
-        BinanceStrategyStore.updateSignal(context, strategy.id, price, signal)
-        if (signal != "WAIT") {
-            val updated = BinanceStrategyStore.list(context).firstOrNull { it.id == strategy.id } ?: strategy
+        val updated = BinanceStrategyStore.updateSignal(context, strategy.id, price, signal) ?: strategy
+        if (signal != "WAIT" && signal != "DATA_UNAVAILABLE" && updated.lastNotifiedSignal == signal && updated.signalCount > strategy.signalCount) {
             BinanceSignalNotifier.notify(context, updated, "${strategy.symbol} 当前价格 ${price ?: "未知"}，策略信号：$signal。应用不会在后台静默下单，请打开量化 Agent 审批。")
             BinanceQuantEvents.emit("strategy_signal")
         }

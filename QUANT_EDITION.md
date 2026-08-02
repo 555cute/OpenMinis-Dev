@@ -10,12 +10,15 @@ surface is a dedicated Binance-style quant dashboard with:
 - Android Keystore-backed API Key / Secret storage;
 - HMAC-SHA256 signed account and order requests with Binance server time;
 - home, market, trade, strategy and asset tabs;
-- Agent tools are first-class Binance tools: market, account, order book and order submission;
+- strategy signal notifications are deduplicated by persisted signal state and include observed signal count/realized PnL;
 - order submission always pauses for human approval in the Android UI;
 - the model never receives API secrets and cannot bypass approval with a parameter;
 - Agent can create, list, enable and pause persisted strategies;
 - strategies use AlarmManager for background signal checks and notification delivery;
-- background execution is signal-only by design: it never silently submits orders while the app is not visible;
+- live order and cancel writes are blocked by local notional, daily-loss and open-order limits;
+- exchangeInfo filters validate quantity steps, price ticks and min/max notionals before approval;
+- user-data WebSocket events update the local order/fill audit and refresh the dashboard;
+- order and fill history is available to the Agent and the app;
 
 ## Build
 

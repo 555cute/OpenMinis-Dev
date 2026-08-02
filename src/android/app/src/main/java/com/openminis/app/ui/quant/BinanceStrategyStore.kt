@@ -32,6 +32,9 @@ data class BinanceStrategy(
     val lastRunAt: Long? = null,
     val lastPrice: Double? = null,
     val lastSignal: String? = null,
+    val lastNotifiedSignal: String? = null,
+    val signalCount: Int = 0,
+    val totalRealizedPnlUsdt: Double = 0.0,
 )
 
 object BinanceStrategyStore {
@@ -74,7 +77,28 @@ object BinanceStrategyStore {
         signal: String,
     ): BinanceStrategy? {
         val found = list(context).firstOrNull { it.id == id } ?: return null
-        val updated = found.copy(lastRunAt = System.currentTimeMillis(), lastPrice = price, lastSignal = signal)
+        val isNewSignal = signal != "WAIT" && signal != found.lastNotifiedSignal
+        val updated = found.copy(
+            lastRunAt = System.currentTimeMillis(),
+            lastPrice = price,
+            lastSignal = signal,
+            lastNotifiedSignal = if (isNewSignal) signal else found.lastNotifiedSignal,
+            signalCount = found.signalCount + if (isNewSignal) 1 else 0,
+        )
+        save(context, updated)
+        return updated
+    }
+
+    fun applyExecution(
+        context: Context,
+        strategyId: String,
+        side: String,
+        quantity: Double,
+        price: Double?,
+        realizedPnlUsdt: Double?,
+    ): BinanceStrategy? {
+        val found = list(context).firstOrNull { it.id == strategyId } ?: return null
+        val updated = found.copy(totalRealizedPnlUsdt = found.totalRealizedPnlUsdt + (realizedPnlUsdt ?: 0.0))
         save(context, updated)
         return updated
     }
@@ -103,6 +127,9 @@ object BinanceStrategyStore {
         putNullable("lastRunAt", strategy.lastRunAt)
         putNullable("lastPrice", strategy.lastPrice)
         putNullable("lastSignal", strategy.lastSignal)
+        putNullable("lastNotifiedSignal", strategy.lastNotifiedSignal)
+        put("signalCount", strategy.signalCount)
+        put("totalRealizedPnlUsdt", strategy.totalRealizedPnlUsdt)
     }
 
     private fun fromJson(json: JSONObject) = BinanceStrategy(
@@ -123,6 +150,9 @@ object BinanceStrategyStore {
         lastRunAt = json.optLongOrNull("lastRunAt"),
         lastPrice = json.optDoubleOrNull("lastPrice"),
         lastSignal = json.optString("lastSignal").takeIf { it.isNotBlank() },
+        lastNotifiedSignal = json.optString("lastNotifiedSignal").takeIf { it.isNotBlank() },
+        signalCount = json.optInt("signalCount", 0),
+        totalRealizedPnlUsdt = json.optDouble("totalRealizedPnlUsdt", 0.0),
     )
 
     private fun JSONObject.putNullable(key: String, value: Any?) {

@@ -47,9 +47,11 @@ object AgentTools {
         add(binanceAccountDefinition())
         add(binanceOrderBookDefinition())
         add(binancePlaceOrderDefinition())
+        add(binanceCancelOrderDefinition())
         add(binanceStrategyListDefinition())
         add(binanceStrategyCreateDefinition())
         add(binanceStrategySetEnabledDefinition())
+        add(binanceOrderHistoryDefinition())
     }
 
     // Aligned with iOS AIChatViewModel.swift:4982-4993
@@ -167,6 +169,29 @@ object AgentTools {
             "price" to AgentToolParam("string", "Limit price in quote asset; required for LIMIT."),
         ),
         required = listOf("tool_title", "product", "mode", "symbol", "side", "type", "quantity"),
+    )
+
+    private fun binanceCancelOrderDefinition(): AgentToolDefinition = AgentToolDefinition(
+        name = "binance_cancel_order",
+        description = "Prepare cancellation of an existing Binance order. Always requires visible human approval before the cancel request is sent.",
+        parameters = mapOf(
+            "tool_title" to AgentToolParam("string", "Short summary shown to the user."),
+            "product" to AgentToolParam("string", "Binance product.", listOf("spot", "usd_m_futures")),
+            "mode" to AgentToolParam("string", "Demo or live environment.", listOf("demo", "live")),
+            "symbol" to AgentToolParam("string", "Symbol such as BTCUSDT."),
+            "order_id" to AgentToolParam("string", "Binance order id."),
+        ),
+        required = listOf("tool_title", "product", "mode", "symbol", "order_id"),
+    )
+
+    private fun binanceOrderHistoryDefinition(): AgentToolDefinition = AgentToolDefinition(
+        name = "binance_order_history",
+        description = "Read the app's persisted Binance order and fill audit. It contains only observed API results and WebSocket updates, not invented PnL.",
+        parameters = mapOf(
+            "tool_title" to AgentToolParam("string", "Short summary shown to the user."),
+            "limit" to AgentToolParam("integer", "Maximum records to return."),
+        ),
+        required = listOf("tool_title"),
     )
 
     private fun binanceStrategyListDefinition(): AgentToolDefinition = AgentToolDefinition(
