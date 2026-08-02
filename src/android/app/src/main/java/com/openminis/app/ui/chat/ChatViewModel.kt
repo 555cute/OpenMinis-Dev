@@ -64,6 +64,9 @@ import com.openminis.app.ui.quant.BinanceCredentialStore
 import com.openminis.app.ui.quant.BinanceCredentials
 import com.openminis.app.ui.quant.BinanceOrderRequest
 import com.openminis.app.ui.quant.BinanceProduct
+import com.openminis.app.ui.quant.BinanceStrategy
+import com.openminis.app.ui.quant.BinanceStrategyAlarmManager
+import com.openminis.app.ui.quant.BinanceStrategyKind
 import com.openminis.app.ui.quant.BinanceQuantEvents
 import com.openminis.app.ui.quant.TradingMode
 import com.openminis.app.offload.OffloadPermissionManager
@@ -7161,6 +7164,9 @@ class ChatViewModel(
             "binance_account" -> executeBinanceAccountTool(argsJson)
             "binance_order_book" -> executeBinanceOrderBookTool(argsJson)
             "binance_place_order" -> executeBinancePlaceOrderTool(argsJson)
+            "binance_strategy_list" -> executeBinanceStrategyListTool(argsJson)
+            "binance_strategy_create" -> executeBinanceStrategyCreateTool(argsJson)
+            "binance_strategy_set_enabled" -> executeBinanceStrategySetEnabledTool(argsJson)
             else -> ToolExecutionResult("Unknown tool: $name", false)
         }
     }
@@ -7287,6 +7293,76 @@ class ChatViewModel(
             )
         } catch (error: Throwable) {
             ToolExecutionResult("Binance order failed: ${binanceToolError(error)}", false, toolTitle = "binance_place_order")
+        }
+    }
+
+    private suspend fun executeBinanceStrategyListTool(argsJson: String): ToolExecutionResult {
+        return try {
+            val args = JSONObject(argsJson)
+            val product = parseBinanceProduct(args.optString("product"))
+            val mode = parseTradingMode(args.optString("mode"))
+            val rows = BinanceStrategyStore.list(context).filter { it.product == product && it.mode == mode }
+            val output = buildString {
+                append("Binance strategies ${product.label}/${mode.label}:\n")
+                if (rows.isEmpty()) append("(none)\n")
+                rows.forEach { strategy ->
+                    append("- id=${strategy.id}, name=${strategy.name}, symbol=${strategy.symbol}, kind=${strategy.kind.label}, enabled=${strategy.enabled}, signalOnly=${strategy.signalOnly}, lastSignal=${strategy.lastSignal}, lastPrice=${strategy.lastPrice}, lastRunAt=${strategy.lastRunAt}\n")
+                }
+            }
+            ToolExecutionResult(output.trimEnd(), true, toolTitle = args.optString("tool_title", "查看量化策略"))
+        } catch (error: Throwable) {
+            ToolExecutionResult("Binance strategy list failed: ${binanceToolError(error)}", false, toolTitle = "binance_strategy_list")
+        }
+    }
+
+    private suspend fun executeBinanceStrategyCreateTool(argsJson: String): ToolExecutionResult {
+        return try {
+            val args = JSONObject(argsJson)
+            val product = parseBinanceProduct(args.optString("product"))
+            val mode = parseTradingMode(args.optString("mode"))
+            val kind = BinanceStrategyKind.valueOf(args.optString("kind").trim().uppercase())
+            if (product == BinanceProduct.SPOT && kind == BinanceStrategyKind.GRID_FUTURES) {
+                return ToolExecutionResult("GRID_FUTURES requires usd_m_futures", false, toolTitle = "binance_strategy_create")
+            }
+            val investment = args.optDouble("investment_usdt", 0.0)
+            if (investment <= 0.0) return ToolExecutionResult("investment_usdt must be greater than zero", false, toolTitle = "binance_strategy_create")
+            val strategy = BinanceStrategy(
+                name = args.optString("name").ifBlank { "Agent 策略" },
+                product = product,
+                mode = mode,
+                symbol = args.optString("symbol").trim().uppercase(),
+                kind = kind,
+                investmentUsdt = investment,
+                lowerPrice = args.optDouble("lower_price").takeIf { !it.isNaN() && it > 0 },
+                upperPrice = args.optDouble("upper_price").takeIf { !it.isNaN() && it > 0 },
+                gridCount = args.optInt("grid_count", 0).takeIf { it > 0 },
+                intervalMinutes = args.optInt("interval_minutes", 15).coerceIn(5, 1440),
+                enabled = true,
+                signalOnly = true,
+            )
+            if (strategy.symbol.isBlank()) return ToolExecutionResult("symbol is required", false, toolTitle = "binance_strategy_create")
+            BinanceStrategyStore.save(context, strategy)
+            BinanceStrategyAlarmManager(context).schedule(strategy)
+            BinanceQuantEvents.emit("strategy_changed")
+            ToolExecutionResult("Strategy created: id=${strategy.id}, name=${strategy.name}, symbol=${strategy.symbol}, kind=${strategy.kind.label}, enabled=true, signalOnly=true. Background checks emit signals only; no silent orders.", true, toolTitle = args.optString("tool_title", "创建量化策略"))
+        } catch (error: Throwable) {
+            ToolExecutionResult("Binance strategy create failed: ${binanceToolError(error)}", false, toolTitle = "binance_strategy_create")
+        }
+    }
+
+    private suspend fun executeBinanceStrategySetEnabledTool(argsJson: String): ToolExecutionResult {
+        return try {
+            val args = JSONObject(argsJson)
+            val id = args.optString("strategy_id").trim()
+            val enabled = args.optBoolean("enabled", false)
+            val updated = BinanceStrategyStore.setEnabled(context, id, enabled)
+                ?: return ToolExecutionResult("Strategy not found: $id", false, toolTitle = "binance_strategy_set_enabled")
+            val alarms = BinanceStrategyAlarmManager(context)
+            if (enabled) alarms.schedule(updated) else alarms.cancel(id)
+            BinanceQuantEvents.emit("strategy_changed")
+            ToolExecutionResult("Strategy ${updated.name} is now ${if (enabled) "enabled" else "paused"}. Signal-only monitoring remains in effect.", true, toolTitle = args.optString("tool_title", "启停量化策略"))
+        } catch (error: Throwable) {
+            ToolExecutionResult("Binance strategy update failed: ${binanceToolError(error)}", false, toolTitle = "binance_strategy_set_enabled")
         }
     }
 

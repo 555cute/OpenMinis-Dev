@@ -13,7 +13,9 @@ surface is a dedicated Binance-style quant dashboard with:
 - Agent tools are first-class Binance tools: market, account, order book and order submission;
 - order submission always pauses for human approval in the Android UI;
 - the model never receives API secrets and cannot bypass approval with a parameter;
-- the original AI agent runtime remains available as the foundation, but the product prompt and tool surface are Binance-first;
+- Agent can create, list, enable and pause persisted strategies;
+- strategies use AlarmManager for background signal checks and notification delivery;
+- background execution is signal-only by design: it never silently submits orders while the app is not visible;
 
 ## Build
 

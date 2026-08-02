@@ -10,8 +10,9 @@ import com.openminis.app.ui.quant.BinanceCredentialStore
 import com.openminis.app.ui.quant.BinanceCredentials
 import com.openminis.app.ui.quant.BinanceOrderRequest
 import com.openminis.app.ui.quant.BinanceProduct
-import com.openminis.app.ui.quant.BinanceQuantEvents
-import com.openminis.app.ui.quant.TradingMode
+import com.openminis.app.ui.quant.BinanceStrategyAlarmManager
+import com.openminis.app.ui.quant.BinanceStrategyKind
+import com.openminis.app.ui.quant.BinanceStrategyStore
 
 /**
  * Central registry of all agent tool definitions.
@@ -46,6 +47,9 @@ object AgentTools {
         add(binanceAccountDefinition())
         add(binanceOrderBookDefinition())
         add(binancePlaceOrderDefinition())
+        add(binanceStrategyListDefinition())
+        add(binanceStrategyCreateDefinition())
+        add(binanceStrategySetEnabledDefinition())
     }
 
     // Aligned with iOS AIChatViewModel.swift:4982-4993
@@ -165,7 +169,47 @@ object AgentTools {
         required = listOf("tool_title", "product", "mode", "symbol", "side", "type", "quantity"),
     )
 
-    // Aligned with iOS AIChatViewModel.swift:5059-5067
+    private fun binanceStrategyListDefinition(): AgentToolDefinition = AgentToolDefinition(
+        name = "binance_strategy_list",
+        description = "List persisted Binance Quant strategies and their real signal-monitor status. This never invents PnL or execution status.",
+        parameters = mapOf(
+            "tool_title" to AgentToolParam("string", "Short summary shown to the user."),
+            "product" to AgentToolParam("string", "Binance product.", listOf("spot", "usd_m_futures")),
+            "mode" to AgentToolParam("string", "Strategy environment.", listOf("demo", "live")),
+        ),
+        required = listOf("tool_title", "product", "mode"),
+    )
+
+    private fun binanceStrategyCreateDefinition(): AgentToolDefinition = AgentToolDefinition(
+        name = "binance_strategy_create",
+        description = "Create a persisted Binance Quant signal-monitor strategy. It schedules real market checks and notifications; it does not place orders silently.",
+        parameters = mapOf(
+            "tool_title" to AgentToolParam("string", "Short summary shown to the user."),
+            "name" to AgentToolParam("string", "Strategy name."),
+            "product" to AgentToolParam("string", "Binance product.", listOf("spot", "usd_m_futures")),
+            "mode" to AgentToolParam("string", "Strategy environment.", listOf("demo", "live")),
+            "symbol" to AgentToolParam("string", "Symbol such as BTCUSDT."),
+            "kind" to AgentToolParam("string", "Strategy type.", listOf("GRID_SPOT", "GRID_FUTURES", "DCA", "REBALANCE")),
+            "investment_usdt" to AgentToolParam("number", "Capital budget used only for strategy configuration."),
+            "lower_price" to AgentToolParam("number", "Grid lower boundary."),
+            "upper_price" to AgentToolParam("number", "Grid upper boundary."),
+            "interval_minutes" to AgentToolParam("integer", "Signal interval, minimum 5 minutes."),
+            "grid_count" to AgentToolParam("integer", "Optional number of grid levels."),
+        ),
+        required = listOf("tool_title", "name", "product", "mode", "symbol", "kind", "investment_usdt"),
+    )
+
+    private fun binanceStrategySetEnabledDefinition(): AgentToolDefinition = AgentToolDefinition(
+        name = "binance_strategy_set_enabled",
+        description = "Enable or pause a persisted Binance Quant signal-monitor strategy. Enabling only schedules signal checks; it cannot bypass order approval.",
+        parameters = mapOf(
+            "tool_title" to AgentToolParam("string", "Short summary shown to the user."),
+            "strategy_id" to AgentToolParam("string", "Persisted strategy id."),
+            "enabled" to AgentToolParam("boolean", "True to monitor, false to pause."),
+        ),
+        required = listOf("tool_title", "strategy_id", "enabled"),
+    )
+
     private fun memoryWriteDefinition(): AgentToolDefinition = AgentToolDefinition(
         name = "memory_write",
         description = "Write a memory entry to today's daily log. Avoid passwords, API keys, tokens, and secrets.",

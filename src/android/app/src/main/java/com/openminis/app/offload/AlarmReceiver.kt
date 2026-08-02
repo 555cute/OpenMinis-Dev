@@ -32,8 +32,9 @@ class AlarmReceiver : BroadcastReceiver() {
             // we don't have to re-register them here.
             try {
                 com.openminis.app.scheduled.ScheduledTaskManager(context).rescheduleAll()
+                com.openminis.app.ui.quant.BinanceStrategyAlarmManager(context).rescheduleAll()
             } catch (t: Throwable) {
-                AppLogger.warning(TAG, "scheduled-task rescheduleAll failed: ${t.message}")
+                AppLogger.warning(TAG, "scheduled/strategy reschedule failed: ${t.message}")
             }
             return
         }

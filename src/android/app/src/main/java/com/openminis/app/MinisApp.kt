@@ -609,7 +609,12 @@ class MinisApp : Application(), ImageLoaderFactory {
             }
         }
 
-        // T268: one-shot migration of pre-T266 internal alarms into the
+        // Re-register persisted Binance strategy signal monitors after process
+        // creation. The monitor only emits signals/notifications; it cannot
+        // bypass the order approval gate.
+        runCatching { com.openminis.app.ui.quant.BinanceStrategyAlarmManager(this).rescheduleAll() }
+            .onFailure { Log.w("MinisApp", "strategy alarms restore failed: ${it.message}") }
+
         // system Clock app. Pre-T266 builds wrote alarms into Minis's own
         // SharedPreferences + AlarmManager; T266 retired that path but old
         // installs still have ghost entries that fire only inside Minis.

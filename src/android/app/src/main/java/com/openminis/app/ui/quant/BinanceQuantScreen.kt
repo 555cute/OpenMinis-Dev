@@ -30,6 +30,7 @@ import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.ArrowDownward
 import androidx.compose.material.icons.filled.ArrowUpward
 import androidx.compose.material.icons.filled.AutoGraph
@@ -37,6 +38,7 @@ import androidx.compose.material.icons.filled.Assessment
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.GridView
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.Key
@@ -90,6 +92,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -113,6 +116,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.platform.LocalContext
+import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 import java.util.Locale
@@ -140,7 +144,7 @@ data class MarketTicker(
     val spark: List<Float>,
 )
 
-private data class QuantColors(
+data class QuantColors(
     val page: Color,
     val card: Color,
     val elevated: Color,
@@ -189,6 +193,8 @@ fun BinanceQuantScreen(
     var accountError by remember { mutableStateOf<String?>(null) }
     var showCredentialSheet by remember { mutableStateOf(false) }
     var menuExpanded by remember { mutableStateOf(false) }
+    var strategyVersion by remember { mutableIntStateOf(0) }
+    var showStrategySheet by remember { mutableStateOf(false) }
     val snackbarHostState = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
 
@@ -198,8 +204,9 @@ fun BinanceQuantScreen(
     val credentials = remember(product, mode, credentialVersion) {
         BinanceCredentialStore.load(context, product, mode)
     }
-    val selectedTicker = tickers.firstOrNull { it.symbol == selectedSymbol }
-        ?: tickers.firstOrNull()
+    val strategies = remember(context, strategyVersion, product, mode) {
+        BinanceStrategyStore.list(context).filter { it.product == product && it.mode == mode }
+    }
 
     BinanceAgentContext.update(product, mode, selectedSymbol)
     LaunchedEffect(Unit) {
@@ -235,7 +242,21 @@ fun BinanceQuantScreen(
         }
     }
 
-    if (showCredentialSheet) {
+    if (showStrategySheet) {
+        BinanceStrategySheet(
+            context = context,
+            product = product,
+            mode = mode,
+            symbols = tickers.map { it.symbol }.ifEmpty { supportedSymbols },
+            onDismiss = { showStrategySheet = false },
+            onSaved = {
+                strategyVersion++
+                showStrategySheet = false
+                scope.launch { snackbarHostState.showSnackbar("策略已保存，将按周期监控并发送信号") }
+            },
+        )
+    }
+
         BinanceCredentialSheet(
             context = context,
             client = client,
@@ -345,8 +366,19 @@ fun BinanceQuantScreen(
                     product = product,
                     mode = mode,
                     credentialsConfigured = credentials != null,
-                    onCredentialsClick = { showCredentialSheet = true },
-                    onTradeClick = { tabName = QuantTab.TRADE.name },
+                    strategies = strategies,
+                    onCreate = { showStrategySheet = true },
+                    onToggle = { strategy, enabled ->
+                        BinanceStrategyStore.setEnabled(context, strategy.id, enabled)?.let {
+                            BinanceStrategyAlarmManager(context).schedule(it)
+                        }
+                        strategyVersion++
+                    },
+                    onDelete = { strategy ->
+                        BinanceStrategyAlarmManager(context).cancel(strategy.id)
+                        BinanceStrategyStore.delete(context, strategy.id)
+                        strategyVersion++
+                    },
                 )
 
                 QuantTab.ASSETS -> AssetsPanel(
@@ -367,7 +399,7 @@ fun BinanceQuantScreen(
 }
 
 @Composable
-private fun QuantHeader(
+    private fun QuantHeader(
     colors: QuantColors,
     product: BinanceProduct,
     mode: TradingMode,
@@ -1016,8 +1048,10 @@ private fun BotsPanel(
     product: BinanceProduct,
     mode: TradingMode,
     credentialsConfigured: Boolean,
-    onCredentialsClick: () -> Unit,
-    onTradeClick: () -> Unit,
+    strategies: List<BinanceStrategy>,
+    onCreate: () -> Unit,
+    onToggle: (BinanceStrategy, Boolean) -> Unit,
+    onDelete: (BinanceStrategy) -> Unit,
 ) {
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 18.dp)) {
         Row(Modifier.fillMaxWidth().padding(top = 4.dp, bottom = 16.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -1036,24 +1070,29 @@ private fun BotsPanel(
                     Spacer(Modifier.width(12.dp))
                     Column(Modifier.weight(1f)) {
                         Text("策略中心", color = colors.text, fontSize = 16.sp, fontWeight = FontWeight.Bold)
-                        Text("${product.label} · ${mode.label}", color = colors.muted, fontSize = 12.sp)
+                        Text("${product.label} · ${mode.label} · ${strategies.size} 个策略", color = colors.muted, fontSize = 12.sp)
                     }
+                    IconButton(onClick = onCreate) { Icon(Icons.Default.Add, "新建策略", tint = BinanceYellow) }
                 }
-                Spacer(Modifier.height(15.dp))
-                Text("当前没有本地虚构机器人。Binance 原生策略产品的订单、收益和生命周期需要对应的策略 API；本版本先提供真实行情、账户、盘口和签名下单。", color = colors.muted, fontSize = 13.sp, lineHeight = 19.sp)
-                Spacer(Modifier.height(13.dp))
-                Row(horizontalArrangement = Arrangement.spacedBy(9.dp)) {
-                    OutlinedButton(onClick = onCredentialsClick, shape = RoundedCornerShape(10.dp)) { Text(if (credentialsConfigured) "更换 API" else "配置 API") }
-                    Button(onClick = onTradeClick, shape = RoundedCornerShape(10.dp), colors = ButtonDefaults.buttonColors(containerColor = BinanceYellow, contentColor = Ink)) { Text("进入交易") }
-                }
+                Spacer(Modifier.height(11.dp))
+                Text("后台只监控真实行情并发送信号，不会绕过人工审批静默下单。", color = colors.muted, fontSize = 13.sp, lineHeight = 19.sp)
             }
         }
-        Spacer(Modifier.height(22.dp))
-        SectionTitle(colors, "策略模板", "仅参数参考", onClick = {})
+        Spacer(Modifier.height(12.dp))
+        if (strategies.isEmpty()) {
+            EmptyDataCard(colors, "还没有策略", "创建网格、DCA 或再平衡监控策略")
+        } else {
+            strategies.forEach { strategy ->
+                StrategyCard(colors, strategy, onToggle, onDelete)
+                Spacer(Modifier.height(9.dp))
+            }
+        }
+        Spacer(Modifier.height(20.dp))
+        SectionTitle(colors, "策略模板", "新建", onClick = onCreate)
         Spacer(Modifier.height(10.dp))
         Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             listOf("现货网格" to Icons.Default.GridView, "合约网格" to Icons.Default.Assessment, "DCA 定投" to Icons.Default.AutoGraph, "再平衡" to Icons.Default.Tune).forEach { (title, icon) ->
-                Column(Modifier.width(88.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                Column(Modifier.width(88.dp).clickable(onClick = onCreate), horizontalAlignment = Alignment.CenterHorizontally) {
                     Box(Modifier.size(70.dp).clip(RoundedCornerShape(18.dp)).background(colors.card), contentAlignment = Alignment.Center) { Icon(icon, title, tint = colors.text, modifier = Modifier.size(28.dp)) }
                     Spacer(Modifier.height(7.dp))
                     Text(title, color = colors.text, fontSize = 12.sp)
@@ -1343,7 +1382,7 @@ private fun availableText(account: BinanceAccountSnapshot?, symbol: String, isBu
     return account.assets.firstOrNull { it.asset == asset }?.free?.let { "${formatQuantity(it)} $asset" } ?: "0 $asset"
 }
 
-private fun formatPrice(value: Double): String = when {
+fun formatPrice(value: Double): String = when {
     value >= 1000 -> String.format(Locale.US, "%,.2f", value)
     value >= 1 -> String.format(Locale.US, "%,.4f", value).trimEnd('0').trimEnd('.')
     else -> String.format(Locale.US, "%.8f", value).trimEnd('0').trimEnd('.')
