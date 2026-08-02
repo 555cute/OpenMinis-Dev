@@ -7286,9 +7286,11 @@ class ChatViewModel(
             }
             val credentials = BinanceCredentialStore.load(context, product, mode)
                 ?: return ToolExecutionResult("Binance API is not configured for ${product.label}/${mode.label}", false, toolTitle = "binance_place_order")
-            val referencePrice = runCatching {
+            val referencePrice = try {
                 BinanceApiClient().load24hTickers(product, mode, listOf(order.symbol)).firstOrNull()?.price
-            }.getOrNull()
+            } catch (error: Throwable) {
+                throw BinanceApiException(0, null, "Unable to read reference price: ${error.message ?: error.javaClass.simpleName}")
+            }
             val filters = BinanceApiClient().loadExchangeFilters(product, mode, order.symbol)
             BinanceApiClient().validateOrderFilters(order, filters, referencePrice)
             BinanceRiskGuard.validateOrder(context, product, mode, order, referencePrice)

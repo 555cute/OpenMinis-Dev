@@ -32,9 +32,11 @@ class BinanceStrategyScheduler(private val context: Context) {
     }
 
     private suspend fun runStrategy(strategy: BinanceStrategy) {
-        val ticker = runCatching {
+        val ticker = try {
             client.load24hTickers(strategy.product, strategy.mode, listOf(strategy.symbol)).firstOrNull()
-        }.getOrNull()
+        } catch (_: Throwable) {
+            null
+        }
         val price = ticker?.price
         val signal = evaluateSignal(strategy, price)
         val updated = BinanceStrategyStore.updateSignal(context, strategy.id, price, signal) ?: strategy

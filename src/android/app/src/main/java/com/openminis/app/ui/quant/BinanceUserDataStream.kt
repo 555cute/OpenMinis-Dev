@@ -2,6 +2,8 @@ package com.openminis.app.ui.quant
 
 import android.content.Context
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import okhttp3.WebSocket
 import okhttp3.WebSocketListener
@@ -20,6 +22,7 @@ class BinanceUserDataStream(
     private val client: BinanceApiClient = BinanceApiClient(),
 ) {
     private var socket: WebSocket? = null
+    private var keepAliveJob: kotlinx.coroutines.Job? = null
     private var listenKey: String? = null
 
     suspend fun start() = withContext(Dispatchers.IO) {
@@ -27,6 +30,12 @@ class BinanceUserDataStream(
         val key = client.createListenKey(product, mode, credentials)
         listenKey = key
         val url = client.userStreamUrl(product, mode, key)
+        keepAliveJob = kotlinx.coroutines.CoroutineScope(Dispatchers.IO).launch {
+            while (true) {
+                delay(25 * 60 * 1000L)
+                runCatching { client.keepAliveListenKey(product, mode, credentials, key) }
+            }
+        }
         socket = client.webSocket(url, object : WebSocketListener() {
             override fun onMessage(webSocket: WebSocket, text: String) {
                 handleEvent(text)
@@ -44,6 +53,8 @@ class BinanceUserDataStream(
     }
 
     suspend fun stop() = withContext(Dispatchers.IO) {
+        keepAliveJob?.cancel()
+        keepAliveJob = null
         socket?.close(1000, "stop")
         socket = null
         listenKey?.let { runCatching { client.closeListenKey(product, mode, credentials, it) } }

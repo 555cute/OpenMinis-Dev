@@ -139,7 +139,12 @@ class BinanceApiClient {
         execute(request)
     }
 
-    fun userStreamUrl(product: BinanceProduct, mode: TradingMode, listenKey: String): String = when (product) {
+    suspend fun keepAliveListenKey(product: BinanceProduct, mode: TradingMode, credentials: BinanceCredentials, listenKey: String) {
+        val path = if (product == BinanceProduct.SPOT) "/api/v3/userDataStream" else "/fapi/v1/listenKey"
+        val request = Request.Builder().url(baseUrl(product, mode) + path + "?listenKey=" + urlEncode(listenKey)).header("X-MBX-APIKEY", credentials.apiKey).put(ByteArray(0).toRequestBody()).build()
+        execute(request)
+    }
+
         BinanceProduct.SPOT -> if (mode == TradingMode.DEMO) "wss://demo-stream.binance.com/ws/$listenKey" else "wss://stream.binance.com/ws/$listenKey"
         BinanceProduct.USD_M_FUTURES -> if (mode == TradingMode.DEMO) "wss://demo-fstream.binance.com/ws/$listenKey" else "wss://fstream.binance.com/ws/$listenKey"
     }

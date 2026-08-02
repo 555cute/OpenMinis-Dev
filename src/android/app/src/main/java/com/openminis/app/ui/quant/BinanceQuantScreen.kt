@@ -1,6 +1,7 @@
 package com.openminis.app.ui.quant
 
 import android.content.Context
+import android.os.Build
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -176,6 +177,14 @@ fun BinanceQuantScreen(
     onAgentClick: () -> Unit,
 ) {
     val context = LocalContext.current
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+        val launcher = androidx.activity.compose.rememberLauncherForActivityResult(androidx.activity.result.contract.ActivityResultContracts.RequestPermission()) { }
+        androidx.compose.runtime.LaunchedEffect(Unit) {
+            if (androidx.core.content.ContextCompat.checkSelfPermission(context, android.Manifest.permission.POST_NOTIFICATIONS) != android.content.pm.PackageManager.PERMISSION_GRANTED) {
+                launcher.launch(android.Manifest.permission.POST_NOTIFICATIONS)
+            }
+        }
+    }
     val colors = quantColors()
     val client = remember { BinanceApiClient() }
     var tabName by rememberSaveable { mutableStateOf(QuantTab.HOME.name) }
@@ -215,7 +224,7 @@ fun BinanceQuantScreen(
         credentials?.let { BinanceUserDataStream(context, product, mode, it, client) }
     }
     androidx.compose.runtime.DisposableEffect(userStream) {
-        val job = userStream?.let { stream -> scope.launch { runCatching { stream.start() } } }
+        val job = userStream?.let { stream -> scope.launch { try { stream.start() } catch (_: Throwable) { } } }
         onDispose {
             job?.cancel()
             scope.launch { userStream?.stop() }
