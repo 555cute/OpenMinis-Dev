@@ -9,7 +9,6 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.matchParentSize
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -111,7 +110,7 @@ fun BinanceStrategySheet(
             Spacer(Modifier.height(9.dp))
             androidx.compose.foundation.layout.Box {
                 OutlinedTextField(symbol, {}, Modifier.fillMaxWidth(), label = { Text("交易对") }, readOnly = true)
-                androidx.compose.foundation.layout.Box(Modifier.matchParentSize().clickable { expandedSymbol = true })
+                androidx.compose.foundation.layout.Box(Modifier.fillMaxWidth().clickable { expandedSymbol = true })
                 DropdownMenu(expanded = expandedSymbol, onDismissRequest = { expandedSymbol = false }) {
                     symbols.distinct().forEach { item -> DropdownMenuItem(text = { Text(item) }, onClick = { symbol = item; expandedSymbol = false }) }
                 }
@@ -119,7 +118,7 @@ fun BinanceStrategySheet(
             Spacer(Modifier.height(9.dp))
             androidx.compose.foundation.layout.Box {
                 OutlinedTextField(kind.label, {}, Modifier.fillMaxWidth(), label = { Text("策略类型") }, readOnly = true)
-                androidx.compose.foundation.layout.Box(Modifier.matchParentSize().clickable { expandedKind = true })
+                androidx.compose.foundation.layout.Box(Modifier.fillMaxWidth().clickable { expandedKind = true })
                 DropdownMenu(expanded = expandedKind, onDismissRequest = { expandedKind = false }) {
                     BinanceStrategyKind.values().filter { product == BinanceProduct.USD_M_FUTURES || it != BinanceStrategyKind.GRID_FUTURES }.forEach { item ->
                         DropdownMenuItem(text = { Text(item.label) }, onClick = { kindName = item.name; expandedKind = false })

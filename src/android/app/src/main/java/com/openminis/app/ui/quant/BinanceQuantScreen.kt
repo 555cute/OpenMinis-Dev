@@ -727,7 +727,7 @@ private fun QuickActions(
                 horizontalAlignment = Alignment.CenterHorizontally,
             ) {
                 Box(Modifier.size(52.dp).clip(RoundedCornerShape(17.dp)).background(colors.card), contentAlignment = Alignment.Center) {
-                    Icon(icon, label, tint, Modifier.size(24.dp))
+                    Icon(icon, label, tint = tint, modifier = Modifier.size(24.dp))
                 }
                 Spacer(Modifier.height(7.dp))
                 Text(label, color = colors.text, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
@@ -1019,7 +1019,7 @@ private fun TradePanel(
         Button(
             enabled = !submitting,
             onClick = { if (credentials == null) onCredentialsClick() else confirmOrder = true },
-            Modifier.fillMaxWidth().height(52.dp),
+            modifier = Modifier.fillMaxWidth().height(52.dp),
             shape = RoundedCornerShape(13.dp),
             colors = ButtonDefaults.buttonColors(containerColor = actionColor),
         ) { Text(if (credentials == null) "先配置 API" else "${side}${ticker.symbol.removeSuffix("USDT")}", fontSize = 16.sp, fontWeight = FontWeight.Bold) }
