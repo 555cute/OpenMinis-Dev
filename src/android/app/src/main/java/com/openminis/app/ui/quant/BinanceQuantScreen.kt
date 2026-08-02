@@ -54,7 +54,7 @@ import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material.icons.filled.WarningAmber
-import androidx.compose.material.icons.outlined.Home
+import androidx.compose.material.icons.outlined.Assessment
 import androidx.compose.material.icons.outlined.SmartToy
 import androidx.compose.material.icons.outlined.SwapHoriz
 import androidx.compose.material.icons.outlined.Wallet
@@ -168,6 +168,7 @@ private data class QuantColors(
     val divider: Color,
 )
 
+@Composable
 private fun quantColors(): QuantColors {
     val dark = MaterialTheme.colorScheme.background.luminance() < 0.35f
     return if (dark) {
@@ -262,7 +263,7 @@ fun BinanceQuantScreen(
 
     Scaffold(
         containerColor = colors.page,
-        contentWindowInsets = { WindowInsets(0, 0, 0, 0) },
+        contentWindowInsets = WindowInsets(0, 0, 0, 0),
         snackbarHost = { SnackbarHost(snackbarHostState) },
         bottomBar = {
             QuantBottomBar(
@@ -432,7 +433,7 @@ private fun QuantBottomBar(
 ) {
     val items = listOf(
         QuantTab.HOME to Icons.Outlined.Home,
-        QuantTab.MARKET to Icons.Outlined.CandlestickChart,
+        QuantTab.MARKET to Icons.Outlined.Assessment,
         QuantTab.TRADE to Icons.Outlined.SwapHoriz,
         QuantTab.BOTS to Icons.Outlined.SmartToy,
         QuantTab.ASSETS to Icons.Outlined.Wallet,
