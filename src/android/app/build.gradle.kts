@@ -34,11 +34,11 @@ android {
 
     defaultConfig {
         // Developer edition: distinct install identity so it can coexist with Minis.
-        applicationId = "com.openminis.app.dev"
+        applicationId = "com.openminis.quant"
         minSdk = 26
         targetSdk = 35
         versionCode = 20
-        versionName = "0.20-preview-dev"
+        versionName = "0.1.0-quant"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 

@@ -17,8 +17,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import com.openminis.app.deeplink.DeepLinkAction
 import com.openminis.app.deeplink.DeepLinkCoordinator
-import com.openminis.app.ui.settings.KEY_LAUNCH_SESSION
-import com.openminis.app.ui.settings.getAppearancePrefs
 import androidx.navigation.NavHostController
 import androidx.navigation.NavType
 import androidx.compose.ui.window.DialogProperties
@@ -30,7 +28,7 @@ import androidx.navigation.navArgument
 import com.openminis.app.data.repository.ChatRepository
 import com.openminis.app.data.repository.ProviderRepository
 import com.openminis.app.ui.chat.ChatScreen
-import com.openminis.app.ui.sessions.SessionListScreen
+import com.openminis.app.ui.quant.BinanceQuantScreen
 import com.openminis.app.ui.settings.AboutScreen
 import com.openminis.app.ui.settings.AddAgentLoopGroupsScreen
 import com.openminis.app.ui.settings.AddAgentLoopModelsScreen
@@ -291,92 +289,14 @@ fun AppNavigation(
         }
     }
 
-    // Resolve launch session preference once into a deferred navigation target.
-    // T314: this LaunchedEffect fires the same frame the NavHost mounts, so
-    // the SESSION_LIST start-destination's NavBackStackEntry is still in
-    // STARTED state when we'd otherwise call navigate(). safeNavigate() —
-    // designed to defang the back-then-tap race — early-returns whenever
-    // the current entry isn't RESUMED, which silently dropped every
-    // launch-session navigation and left the user on the home screen
-    // regardless of mode 1 / 2 / 0. Wait for the start destination to
-    // settle into RESUMED before navigating; for mode 3 (Home) we don't
-    // need to navigate at all so we can skip the wait entirely.
-    LaunchedEffect(Unit) {
-        val hasDeepLink = initialDeepLink != null && initialDeepLink !is DeepLinkAction.Unknown
-        if (hasDeepLink) return@LaunchedEffect
-        val hasPendingShare =
-            com.openminis.app.share.ShareCoordinator.bufferVersion.value > 0
-        val rawMode = getAppearancePrefs(context).getInt(KEY_LAUNCH_SESSION, 0)
-        // Hang-detector circuit breaker: if the previous launches racked up
-        // ≥3 main-thread hangs, force mode = 3 (home) so we don't reopen
-        // the session/chat that was hanging. The user clears this either
-        // by completing a chat session quietly (HangDetector.markHealthyTick
-        // on ChatScreen) or by tapping the manual reset in Settings.
-        //
-        // Crash-frequency circuit breaker: same effect, different trigger.
-        // When CrashFrequencyDetector tripped on the previous boot it set
-        // a 1-hour force-home grace window — within that window every
-        // launch lands on Home regardless of the user's Launch Session
-        // preference, even after they dismissed the share dialog. Avoids
-        // re-entering the session that may have been the crash trigger.
-        //
-        // [T-android-larky-longsession-followup] Beacon-driven restart-count
-        // gate: the previous cycle ended in crash_or_stall AND the rolling
-        // count of consecutive crashed launches exceeds the threshold
-        // (default 3). Catches the "process repeatedly killed re-entering
-        // the same monster session" pattern that the existing
-        // HangDetector breaker misses when hangs short-circuit before the
-        // SharedPreferences counter increments. Resets automatically the
-        // moment the user has ANY non-crash_or_stall cycle (clean_exit /
-        // silent_kill / first_launch) — see LaunchCycleBeacon.lastRestartCount.
-        val mode = if (
-            com.openminis.app.diagnostics.HangDetector.shouldForceHomeOnLaunch(context) ||
-            com.openminis.app.crash.CrashFrequencyDetector.shouldForceHomeOnLaunch(context) ||
-            com.openminis.app.diagnostics.LaunchCycleBeacon.shouldForceHomeOnLaunch()
-        ) 3 else rawMode
-        val autoThresholdMs = 15L * 60 * 1000
-        val target: String? = when {
-            // T185: if a system share is buffered and the configured launch
-            // mode would leave us on the session list (mode 3 = Home), the
-            // ChatScreen consumer never mounts and the buffer expires —
-            // exactly the symptom from the bug report. Force a new draft
-            // chat so the share lands in a composer.
-            hasPendingShare && mode == 3 -> Routes.chat("__new__${java.util.UUID.randomUUID()}")
-            mode == 1 -> chatRepository.dao.listSessions().firstOrNull()?.let { Routes.chat(it.id) }
-            mode == 2 -> Routes.chat("__new__${java.util.UUID.randomUUID()}")
-            mode == 3 -> null
-            else -> {
-                val latest = chatRepository.dao.listSessions().firstOrNull()
-                val fresh = latest != null && System.currentTimeMillis() - latest.updatedAt < autoThresholdMs
-                if (fresh) Routes.chat(latest!!.id) else Routes.chat("__new__${java.util.UUID.randomUUID()}")
-            }
-        }
-        if (target != null) {
-            // T314: navigate directly without the safeNavigate guard.
-            // safeNavigate exists to defang back-then-tap-settings races
-            // where a popped destination is mid-tear-down — it requires
-            // RESUMED to be safe. But this LaunchedEffect fires on the
-            // first composition pass, when the start destination is
-            // STARTED but not yet RESUMED. There's no race here: we're
-            // the deterministic startup dispatcher, the start destination
-            // hasn't even rendered, and we want to navigate to it BEFORE
-            // it shows. Calling navigate() unconditionally produces the
-            // intended cold-start dispatch (mode 1 → last session, mode 2
-            // → new chat, mode 0 → auto). Pre-T314 the safeNavigate guard
-            // silently dropped this navigation and stranded the user on
-            // the SESSION_LIST start destination regardless of mode.
-            navController.navigate(target) {
-                popUpTo(Routes.SESSION_LIST) { inclusive = false }
-            }
-        }
-    }
+    // Binance Quant is the product home. The old Minis session-launch
+    // resolver is intentionally not used by this edition: chat remains
+    // available through the AI assistant entry point instead of being the
+    // first-run surface.
 
     // T185: warm-share fallback — if a share lands while the user is sitting
-    // on the session list (cold-start with mode 3 that raced past the launch
-    // resolver, or onNewIntent re-fires processPendingShare), route into a
-    // fresh chat so ChatScreen's existing LaunchedEffect(shareBufferVersion)
-    // can drain it. The drain itself is idempotent: consumeBuffer is one-shot,
-    // so a ChatScreen already in the backstack won't double-inject.
+    // on the quant dashboard, route into a fresh chat so ChatScreen's
+    // existing share-buffer consumer can drain it.
     val shareBufferVersion by com.openminis.app.share.ShareCoordinator.bufferVersion.collectAsState()
     LaunchedEffect(shareBufferVersion) {
         if (shareBufferVersion == 0) return@LaunchedEffect
@@ -486,33 +406,14 @@ fun AppNavigation(
             ) + fadeOut(animationSpec = tween(200, easing = EmphasizedAccelerate))
         },
     ) {
+        // The market surface owns the root navigation. Legacy sessions and
+        // chat routes remain registered below for assistant/deep-link use,
+        // but are no longer the first-run home.
         composable(Routes.SESSION_LIST) {
-            SessionListScreen(
-                chatRepository = chatRepository,
-                providerRepository = providerRepository,
-                onSessionClick = { sessionId ->
-                    navController.safeNavigate(Routes.chat(sessionId))
-                },
-                onNewChat = { sessionId ->
-                    navController.safeNavigate(Routes.chat(sessionId))
-                },
-                onSettingsClick = {
-                    navController.safeNavigate(Routes.SETTINGS)
-                },
-                onAddProviderClick = {
-                    navController.safeNavigate(Routes.ADD_PROVIDER)
-                },
-                onSelectModelsClick = {
-                    navController.safeNavigate(Routes.ONBOARDING_MODELS)
-                },
-                onTerminalClick = {
-                    navController.safeNavigate(Routes.terminal())
-                },
-                onRootfsClick = {
-                    navController.safeNavigate(Routes.ROOTFS_MANAGEMENT)
-                },
-                onScheduledTasksClick = {
-                    navController.safeNavigate(Routes.SCHEDULED_TASKS)
+            BinanceQuantScreen(
+                onSettingsClick = { navController.safeNavigate(Routes.SETTINGS) },
+                onAgentClick = {
+                    navController.safeNavigate(Routes.chat("__new__${java.util.UUID.randomUUID()}"))
                 },
             )
         }

@@ -37,11 +37,9 @@ import com.openminis.app.logging.AppLogger
 import com.openminis.app.service.SessionActivityTracker
 import com.openminis.app.ui.navigation.AppNavigation
 import com.openminis.app.ui.navigation.Routes
-import com.openminis.app.ui.navigation.safeNavigate
 import com.openminis.app.ui.settings.KEY_FONT_APP_BASE
 import com.openminis.app.ui.settings.KEY_KEEP_SCREEN_AWAKE
 import com.openminis.app.ui.settings.KEY_LANGUAGE
-import com.openminis.app.ui.settings.KEY_LAUNCH_SESSION
 import com.openminis.app.ui.settings.KEY_THEME_MODE
 import com.openminis.app.ui.settings.PREF_APPEARANCE
 import com.openminis.app.ui.settings.getAppearancePrefs
@@ -63,23 +61,10 @@ class MainActivity : ComponentActivity() {
      */
     private var currentChatSessionId: String? = null
 
-    /**
-     * T166: id of the chat to re-open on first composition after a
-     * process-death restart. Set in [onCreate] from the saved state
-     * bundle, consumed exactly once by [AppNavigation] via the
-     * synthesised deep-link.
-     */
+    /** Quant dashboard does not restore a chat as the root screen. */
     private var restoredChatSessionId: String? = null
 
-    /**
-     * T293 / issue #10: tracks whether [onStart] has fired at least once, so
-     * that the very first ON_START (the cold-start one — already covered by
-     * [com.openminis.app.ui.navigation.AppNavigation]'s LaunchedEffect that
-     * resolves [KEY_LAUNCH_SESSION]) is skipped here. Subsequent ON_STARTs
-     * are background → foreground transitions, where the launch-session
-     * preference must be honoured again so "New Chat on launch" actually
-     * does what it says when the user resumes from the recents tray.
-     */
+    /** Quant dashboard keeps its current tab stable across backgrounding. */
     private var hasResumedFromBackground = false
 
     /**
@@ -329,18 +314,14 @@ class MainActivity : ComponentActivity() {
         val app = application as MinisApp
 
         // Parse deep link from launch intent. A real deep-link in the
-        // launch intent always wins over a saved-state restore (the
-        // user explicitly tapped a link). Otherwise, if we were killed
-        // while inside a chat, synthesise an OpenSession deep-link so
-        // the navigation stack lands on that chat instead of the
-        // sessions list. T166.
+        // launch intent always wins over normal dashboard startup.
+        // Chat restore is intentionally not used as the product home; the
+        // AI assistant action can still open the last/next chat explicitly.
         val explicitDeepLink = DeepLinkHandler.parse(intent?.data)
         val launchDeepLink = if (explicitDeepLink !is DeepLinkAction.Unknown) {
             explicitDeepLink
         } else {
-            restoredChatSessionId
-                ?.let { DeepLinkAction.OpenSession(it) }
-                ?: DeepLinkAction.Unknown
+            DeepLinkAction.Unknown
         }
 
         setContent {
@@ -444,12 +425,8 @@ class MainActivity : ComponentActivity() {
     }
 
     /**
-     * T166: persist the current chat sessionId so an LMK kill while in
-     * chat restarts back to the same session (see `restoredChatSessionId`
-     * in [onCreate]). Called by the OS in the same lifecycle phase that
-     * Activity Recreation uses, so a configuration change also goes
-     * through this path — which is exactly what we want; the state is
-     * cheap and re-read is idempotent.
+     * T166: persist the current chat sessionId for assistant deep-link
+     * continuity. The quant dashboard itself is not replaced by this state.
      */
     override fun onSaveInstanceState(outState: Bundle) {
         super.onSaveInstanceState(outState)
@@ -459,20 +436,8 @@ class MainActivity : ComponentActivity() {
     }
 
     /**
-     * T293 / issue #10: re-honour the "Launch Session" preference when the
-     * app comes back to the foreground from the recents tray. Cold start
-     * is already covered by [com.openminis.app.ui.navigation.AppNavigation]
-     * resolving [KEY_LAUNCH_SESSION] in its `LaunchedEffect(Unit)` —
-     * skipped here via [hasResumedFromBackground] so we don't double-fire
-     * on the first start.
-     *
-     * Scoped to mode 2 (New Chat). Modes 0 (Auto) / 1 (Last Session) /
-     * 3 (Home) are intentionally NOT re-evaluated on resume — bouncing
-     * the user out of whatever screen they were on every time they
-     * returned from the recents tray would be jarring. "New Chat" is the
-     * only mode whose semantics genuinely demand a fresh chat on every
-     * activation (cold or warm) — that's exactly the user expectation
-     * the issue is reporting on.
+     * Keep the quant dashboard stable when returning from recents. Legacy
+     * launch-session preferences are intentionally ignored by this edition.
      */
     override fun onStart() {
         super.onStart()
@@ -480,14 +445,9 @@ class MainActivity : ComponentActivity() {
             hasResumedFromBackground = true
             return
         }
-        val mode = getAppearancePrefs(this).getInt(KEY_LAUNCH_SESSION, 0)
-        if (mode != 2) return
-        val nav = navController ?: return
-        val newRoute = Routes.chat("__new__${java.util.UUID.randomUUID()}")
-        AppLogger.info("LaunchSession", "resume → mode=NewChat, navigating to $newRoute")
-        nav.safeNavigate(newRoute) {
-            popUpTo(Routes.SESSION_LIST) { inclusive = false }
-        }
+        // Quant dashboard stays stable across background/foreground. The
+        // legacy "new chat on launch" preference must not replace the market
+        // home while returning from recents.
     }
 
     /**
