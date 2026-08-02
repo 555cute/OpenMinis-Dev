@@ -244,8 +244,18 @@ fun BinanceQuantScreen(
     }
 
     LaunchedEffect(Unit) {
-        BinanceQuantEvents.events.collectLatest {
-            refreshKey++
+        BinanceQuantEvents.events.collectLatest { event ->
+            when (event) {
+                // Market WebSocket ticks arrive continuously. They must not
+                // invalidate the account snapshot or trigger signed REST
+                // requests on every ticker message.
+                "market_tick" -> Unit
+                // Account-affecting events need a fresh signed snapshot.
+                "order_submitted", "order_cancelled", "order_update" -> refreshKey++
+                // Strategy changes only affect the strategy list; they do not
+                // require an account refresh.
+                "strategy_changed", "strategy_signal" -> strategyVersion++
+            }
         }
     }
 
