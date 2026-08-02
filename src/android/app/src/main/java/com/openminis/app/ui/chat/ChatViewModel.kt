@@ -70,7 +70,7 @@ import com.openminis.app.ui.quant.BinanceRiskGuard
 import com.openminis.app.ui.quant.BinanceProduct
 import com.openminis.app.ui.quant.BinanceStrategy
 import com.openminis.app.ui.quant.BinanceStrategyAlarmManager
-import com.openminis.app.ui.quant.BinanceStrategyKind
+import com.openminis.app.ui.quant.BinanceStrategyStore
 import com.openminis.app.ui.quant.BinanceQuantEvents
 import com.openminis.app.ui.quant.TradingMode
 import com.openminis.app.offload.OffloadPermissionManager
