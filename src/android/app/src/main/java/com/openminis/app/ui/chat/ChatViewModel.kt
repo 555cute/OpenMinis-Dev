@@ -59,6 +59,7 @@ import com.openminis.app.tools.ReadImageTool
 import com.openminis.app.ui.quant.BinanceApiClient
 import com.openminis.app.ui.quant.BinanceApiException
 import com.openminis.app.ui.quant.BinanceApprovalStore
+import com.openminis.app.ui.quant.BinanceAgentContext
 import com.openminis.app.ui.quant.BinanceCredentialStore
 import com.openminis.app.ui.quant.BinanceCredentials
 import com.openminis.app.ui.quant.BinanceOrderRequest
@@ -8291,7 +8292,11 @@ Scheduled tasks: crontab / at / nohup loops will stop when the app is suspended,
             append("\n\nRuntime context:\n")
             append("- Current date: ").append(dateStr).append(" (").append(tzId).append(")\n")
             append("- Device language: ").append(lang).append("\n")
-            append("- minis-model-use models available: ").append(modelUseCount)
+            append("- minis-model-use models available: ").append(modelUseCount).append("\n")
+            val quant = BinanceAgentContext.current.value
+            append("- Active Binance product: ").append(quant.product.label).append("\n")
+            append("- Active Binance environment: ").append(quant.mode.label).append("\n")
+            append("- Active Binance symbol: ").append(quant.symbol)
         }
     }
 

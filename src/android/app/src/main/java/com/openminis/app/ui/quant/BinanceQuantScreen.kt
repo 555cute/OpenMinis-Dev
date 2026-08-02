@@ -201,6 +201,7 @@ fun BinanceQuantScreen(
     val selectedTicker = tickers.firstOrNull { it.symbol == selectedSymbol }
         ?: tickers.firstOrNull()
 
+    BinanceAgentContext.update(product, mode, selectedSymbol)
     LaunchedEffect(Unit) {
         BinanceQuantEvents.events.collectLatest {
             refreshKey++
