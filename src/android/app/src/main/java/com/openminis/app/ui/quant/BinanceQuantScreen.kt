@@ -113,6 +113,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.platform.LocalContext
+import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 import java.util.Locale
 import kotlin.math.max
@@ -199,6 +200,12 @@ fun BinanceQuantScreen(
     }
     val selectedTicker = tickers.firstOrNull { it.symbol == selectedSymbol }
         ?: tickers.firstOrNull()
+
+    LaunchedEffect(Unit) {
+        BinanceQuantEvents.events.collectLatest {
+            refreshKey++
+        }
+    }
 
     LaunchedEffect(refreshKey, product, mode) {
         tickerLoading = true

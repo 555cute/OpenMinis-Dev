@@ -10,8 +10,10 @@ surface is a dedicated Binance-style quant dashboard with:
 - Android Keystore-backed API Key / Secret storage;
 - HMAC-SHA256 signed account and order requests with Binance server time;
 - home, market, trade, strategy and asset tabs;
-- no fake balance, PnL, order-book or order-success fallback;
-- the original AI agent retained behind the AI assistant action.
+- Agent tools are first-class Binance tools: market, account, order book and order submission;
+- order submission always pauses for human approval in the Android UI;
+- the model never receives API secrets and cannot bypass approval with a parameter;
+- the original AI agent runtime remains available as the foundation, but the product prompt and tool surface are Binance-first;
 
 ## Build
 

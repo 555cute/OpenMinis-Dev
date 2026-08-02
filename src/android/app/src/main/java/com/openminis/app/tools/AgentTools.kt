@@ -3,6 +3,15 @@ package com.openminis.app.tools
 import com.openminis.app.browser.BrowserAction
 import com.openminis.app.data.model.AgentToolDefinition
 import com.openminis.app.data.model.AgentToolParam
+import com.openminis.app.ui.quant.BinanceApiClient
+import com.openminis.app.ui.quant.BinanceApiException
+import com.openminis.app.ui.quant.BinanceApprovalStore
+import com.openminis.app.ui.quant.BinanceCredentialStore
+import com.openminis.app.ui.quant.BinanceCredentials
+import com.openminis.app.ui.quant.BinanceOrderRequest
+import com.openminis.app.ui.quant.BinanceProduct
+import com.openminis.app.ui.quant.BinanceQuantEvents
+import com.openminis.app.ui.quant.TradingMode
 
 /**
  * Central registry of all agent tool definitions.
@@ -33,6 +42,10 @@ object AgentTools {
             add(memoryWriteDefinition())
             add(memoryGetDefinition())
         }
+        add(binanceMarketDefinition())
+        add(binanceAccountDefinition())
+        add(binanceOrderBookDefinition())
+        add(binancePlaceOrderDefinition())
     }
 
     // Aligned with iOS AIChatViewModel.swift:4982-4993
@@ -100,17 +113,65 @@ object AgentTools {
         propertyOrdering = listOf("tool_title", "action", "tab_id", "url", "selector", "text", "coordinate_x", "coordinate_y", "direction", "amount", "scroll_count", "item_selector", "script", "user_agent", "max_depth", "keywords", "fuzzy", "cookies", "timeout", "viewport_width", "viewport_height", "reset"),
     )
 
+    private fun binanceMarketDefinition(): AgentToolDefinition = AgentToolDefinition(
+        name = "binance_market",
+        description = "Read real-time Binance Spot or USDⓈ-M Futures market data. No credentials required. Returns 24h price change, volume and recent hourly closes. Never invent values when the API fails.",
+        parameters = mapOf(
+            "tool_title" to AgentToolParam("string", "Short summary shown to the user."),
+            "product" to AgentToolParam("string", "Binance product.", listOf("spot", "usd_m_futures")),
+            "mode" to AgentToolParam("string", "Use demo or live market endpoint.", listOf("demo", "live")),
+            "symbols" to AgentToolParam("string", "Comma-separated symbols such as BTCUSDT,ETHUSDT."),
+        ),
+        required = listOf("tool_title", "product", "mode", "symbols"),
+    )
+
+    private fun binanceAccountDefinition(): AgentToolDefinition = AgentToolDefinition(
+        name = "binance_account",
+        description = "Read the connected Binance account balances, equity, available balance, unrealized PnL and trading permission. Credentials remain inside the app and are never returned to the model.",
+        parameters = mapOf(
+            "tool_title" to AgentToolParam("string", "Short summary shown to the user."),
+            "product" to AgentToolParam("string", "Binance product.", listOf("spot", "usd_m_futures")),
+            "mode" to AgentToolParam("string", "Use demo or live account.", listOf("demo", "live")),
+        ),
+        required = listOf("tool_title", "product", "mode"),
+    )
+
+    private fun binanceOrderBookDefinition(): AgentToolDefinition = AgentToolDefinition(
+        name = "binance_order_book",
+        description = "Read the real-time Binance order book for one symbol. Returns bids and asks from the selected Spot or USDⓈ-M Futures endpoint.",
+        parameters = mapOf(
+            "tool_title" to AgentToolParam("string", "Short summary shown to the user."),
+            "product" to AgentToolParam("string", "Binance product.", listOf("spot", "usd_m_futures")),
+            "mode" to AgentToolParam("string", "Use demo or live market endpoint.", listOf("demo", "live")),
+            "symbol" to AgentToolParam("string", "Symbol such as BTCUSDT."),
+            "limit" to AgentToolParam("integer", "Depth limit, for example 10."),
+        ),
+        required = listOf("tool_title", "product", "mode", "symbol"),
+    )
+
+    private fun binancePlaceOrderDefinition(): AgentToolDefinition = AgentToolDefinition(
+        name = "binance_place_order",
+        description = "Prepare a Binance order. This tool ALWAYS pauses for explicit human approval in the app before sending. Never claim an order was sent until the confirmed API response is returned. LIVE orders can use real funds.",
+        parameters = mapOf(
+            "tool_title" to AgentToolParam("string", "Short summary shown to the user."),
+            "product" to AgentToolParam("string", "Binance product.", listOf("spot", "usd_m_futures")),
+            "mode" to AgentToolParam("string", "Demo is recommended. Live sends a real order.", listOf("demo", "live")),
+            "symbol" to AgentToolParam("string", "Symbol such as BTCUSDT."),
+            "side" to AgentToolParam("string", "BUY or SELL.", listOf("BUY", "SELL")),
+            "type" to AgentToolParam("string", "MARKET or LIMIT.", listOf("MARKET", "LIMIT")),
+            "quantity" to AgentToolParam("string", "Base-asset quantity, respecting Binance exchange filters."),
+            "price" to AgentToolParam("string", "Limit price in quote asset; required for LIMIT."),
+        ),
+        required = listOf("tool_title", "product", "mode", "symbol", "side", "type", "quantity"),
+    )
+
     // Aligned with iOS AIChatViewModel.swift:5059-5067
     private fun memoryWriteDefinition(): AgentToolDefinition = AgentToolDefinition(
         name = "memory_write",
-        description = "Write a memory entry to today's daily log (YYYY-MM-DD.md). Memories persist across all sessions. " +
-            "Each entry is prepended with a timestamp. " +
-            "Save: user preferences, recurring patterns, key facts, project conventions, reusable knowledge. " +
-            "Avoid saving passwords, API keys, tokens, or secrets unless the user explicitly confirms after being warned. " +
-            "Keep entries concise and general-purpose. GLOBAL.md is read-only (user-maintained via Settings).",
+        description = "Write a memory entry to today's daily log. Avoid passwords, API keys, tokens, and secrets.",
         parameters = mapOf(
-            "tool_title" to AgentToolParam("string", "A concise 5-10 word summary of what this tool call does, shown to the user (e.g. 'Save user preference for Python', 'Note today's project context'). Use the same language as the user."),
-            "content" to AgentToolParam("string", "The memory content to write. Use concise Markdown with a short heading (## Topic) and context about what was done/learned."),
+            "tool_title" to AgentToolParam("string", "Short summary shown to the user."),
+            "content" to AgentToolParam("string", "Concise Markdown memory content."),
         ),
         required = listOf("tool_title", "content"),
         propertyOrdering = listOf("tool_title", "content"),

@@ -73,6 +73,26 @@ data class BinanceOrderResult(
     val avgPrice: Double?,
 )
 
+data class BinanceOpenOrder(
+    val orderId: String,
+    val symbol: String,
+    val side: String,
+    val type: String,
+    val status: String,
+    val originalQuantity: Double,
+    val executedQuantity: Double,
+    val price: Double,
+)
+
+data class BinancePosition(
+    val symbol: String,
+    val amount: Double,
+    val entryPrice: Double,
+    val markPrice: Double,
+    val unrealizedPnl: Double,
+    val leverage: Int?,
+)
+
 class BinanceApiException(
     val httpCode: Int,
     val binanceCode: Int?,
@@ -179,6 +199,86 @@ class BinanceApiClient {
         }
     }
 
+    suspend fun loadOpenOrders(
+        product: BinanceProduct,
+        mode: TradingMode,
+        credentials: BinanceCredentials,
+        symbol: String? = null,
+    ): List<BinanceOpenOrder> {
+        val params = symbol?.takeIf { it.isNotBlank() }?.let { listOf("symbol" to it) } ?: emptyList()
+        val payload = signedJsonPayload(product, mode, openOrdersPath(product), credentials, params)
+        val array = JSONArray(payload)
+        return buildList {
+            for (index in 0 until array.length()) {
+                val item = array.getJSONObject(index)
+                add(
+                    BinanceOpenOrder(
+                        orderId = item.optString("orderId"),
+                        symbol = item.optString("symbol"),
+                        side = item.optString("side"),
+                        type = item.optString("type"),
+                        status = item.optString("status"),
+                        originalQuantity = item.optString("origQty", "0").toDoubleOrNull() ?: 0.0,
+                        executedQuantity = item.optString("executedQty", "0").toDoubleOrNull() ?: 0.0,
+                        price = item.optString("price", "0").toDoubleOrNull() ?: 0.0,
+                    ),
+                )
+            }
+        }
+    }
+
+    suspend fun loadPositions(
+        product: BinanceProduct,
+        mode: TradingMode,
+        credentials: BinanceCredentials,
+    ): List<BinancePosition> {
+        if (product != BinanceProduct.USD_M_FUTURES) return emptyList()
+        val json = JSONObject(signedJsonPayload(product, mode, positionRiskPath(product), credentials, emptyList()))
+        val positions = json.optJSONArray("positions") ?: JSONArray()
+        return buildList {
+            for (index in 0 until positions.length()) {
+                val item = positions.getJSONObject(index)
+                val amount = item.optString("positionAmt", "0").toDoubleOrNull() ?: 0.0
+                if (abs(amount) < 1e-12) continue
+                add(
+                    BinancePosition(
+                        symbol = item.optString("symbol"),
+                        amount = amount,
+                        entryPrice = item.optString("entryPrice", "0").toDoubleOrNull() ?: 0.0,
+                        markPrice = item.optString("markPrice", "0").toDoubleOrNull() ?: 0.0,
+                        unrealizedPnl = item.optString("unRealizedProfit", "0").toDoubleOrNull() ?: 0.0,
+                        leverage = item.optString("leverage", "").toIntOrNull(),
+                    ),
+                )
+            }
+        }
+    }
+
+    suspend fun cancelOrder(
+        product: BinanceProduct,
+        mode: TradingMode,
+        credentials: BinanceCredentials,
+        symbol: String,
+        orderId: String,
+    ): BinanceOrderResult {
+        val json = JSONObject(
+            signedJsonPayload(
+                product,
+                mode,
+                cancelOrderPath(product),
+                credentials,
+                listOf("symbol" to symbol, "orderId" to orderId),
+                method = "DELETE",
+            ),
+        )
+        return BinanceOrderResult(
+            orderId = json.optString("orderId", orderId),
+            status = json.optString("status", "UNKNOWN"),
+            executedQuantity = json.optString("executedQty", "0").toDoubleOrNull() ?: 0.0,
+            avgPrice = json.optString("price", "").toDoubleOrNull()?.takeIf { it > 0 },
+        )
+    }
+
     suspend fun placeOrder(
         product: BinanceProduct,
         mode: TradingMode,
@@ -227,23 +327,36 @@ class BinanceApiClient {
         params: List<Pair<String, String>>,
         method: String = "GET",
     ): JSONObject {
+        return JSONObject(signedJsonPayload(product, mode, path, credentials, params, method))
+    }
+
+    private suspend fun signedJsonPayload(
+        product: BinanceProduct,
+        mode: TradingMode,
+        path: String,
+        credentials: BinanceCredentials,
+        params: List<Pair<String, String>>,
+        method: String = "GET",
+    ): String {
         val timestamp = try {
             serverTime(product, mode)
         } catch (_: Throwable) {
             System.currentTimeMillis()
         }
-        val signedParams = params + listOf(
-            "recvWindow" to "5000",
-            "timestamp" to timestamp.toString(),
-        )
+        val signedParams = params + listOf("recvWindow" to "5000", "timestamp" to timestamp.toString())
         val query = encodeQuery(signedParams)
         val signature = hmacSha256(credentials.secretKey, query)
         val request = Request.Builder()
             .url(baseUrl(product, mode) + path + "?" + query + "&signature=" + signature)
             .header("X-MBX-APIKEY", credentials.apiKey)
-            .apply { if (method == "POST") post(ByteArray(0).toRequestBody()) }
+            .apply {
+                when (method) {
+                    "POST" -> post(ByteArray(0).toRequestBody())
+                    "DELETE" -> delete()
+                }
+            }
             .build()
-        return JSONObject(execute(request))
+        return execute(request)
     }
 
     private suspend fun serverTime(product: BinanceProduct, mode: TradingMode): Long {
@@ -359,6 +472,9 @@ class BinanceApiClient {
     private fun accountPath(product: BinanceProduct) = if (product == BinanceProduct.SPOT) "/api/v3/account" else "/fapi/v3/account"
     private fun orderPath(product: BinanceProduct) = if (product == BinanceProduct.SPOT) "/api/v3/order" else "/fapi/v1/order"
     private fun timePath(product: BinanceProduct) = if (product == BinanceProduct.SPOT) "/api/v3/time" else "/fapi/v1/time"
+    private fun openOrdersPath(product: BinanceProduct) = if (product == BinanceProduct.SPOT) "/api/v3/openOrders" else "/fapi/v1/openOrders"
+    private fun positionRiskPath(product: BinanceProduct) = "/fapi/v2/positionRisk"
+    private fun cancelOrderPath(product: BinanceProduct) = if (product == BinanceProduct.SPOT) "/api/v3/order" else "/fapi/v1/order"
 
     private fun encodeQuery(params: List<Pair<String, String>>): String = params.joinToString("&") {
         urlEncode(it.first) + "=" + urlEncode(it.second)

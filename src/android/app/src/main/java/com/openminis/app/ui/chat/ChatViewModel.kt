@@ -56,7 +56,15 @@ import com.openminis.app.tools.FileReadTool
 import com.openminis.app.tools.FileWriteTool
 import com.openminis.app.tools.MemoryTools
 import com.openminis.app.tools.ReadImageTool
-import com.openminis.app.tools.ToolExecutionResult
+import com.openminis.app.ui.quant.BinanceApiClient
+import com.openminis.app.ui.quant.BinanceApiException
+import com.openminis.app.ui.quant.BinanceApprovalStore
+import com.openminis.app.ui.quant.BinanceCredentialStore
+import com.openminis.app.ui.quant.BinanceCredentials
+import com.openminis.app.ui.quant.BinanceOrderRequest
+import com.openminis.app.ui.quant.BinanceProduct
+import com.openminis.app.ui.quant.BinanceQuantEvents
+import com.openminis.app.ui.quant.TradingMode
 import com.openminis.app.offload.OffloadPermissionManager
 import com.openminis.app.service.SessionActivityTracker
 import com.openminis.app.service.SessionConcurrencyManager
@@ -7148,15 +7156,159 @@ class ChatViewModel(
             "browser_use" -> executeBrowserUseTool(argsJson)
             "memory_write" -> executeMemoryWriteTool(argsJson)
             "memory_get" -> executeMemoryGetTool(argsJson)
+            "binance_market" -> executeBinanceMarketTool(argsJson)
+            "binance_account" -> executeBinanceAccountTool(argsJson)
+            "binance_order_book" -> executeBinanceOrderBookTool(argsJson)
+            "binance_place_order" -> executeBinancePlaceOrderTool(argsJson)
             else -> ToolExecutionResult("Unknown tool: $name", false)
         }
     }
 
+    private suspend fun executeBinanceMarketTool(argsJson: String): ToolExecutionResult {
+        return try {
+            val args = JSONObject(argsJson)
+            val product = parseBinanceProduct(args.optString("product"))
+            val mode = parseTradingMode(args.optString("mode"))
+            val symbols = args.optString("symbols")
+                .split(',', ' ', '\n', '\t')
+                .map { it.trim().uppercase() }
+                .filter { it.isNotBlank() }
+                .distinct()
+                .take(20)
+            if (symbols.isEmpty()) return ToolExecutionResult("Error: symbols is required", false, toolTitle = "binance_market")
+            val rows = BinanceApiClient().load24hTickers(product, mode, symbols)
+            val output = buildString {
+                append("Binance ${product.label} ${mode.label} real-time market data:\n")
+                rows.forEach { row ->
+                    append("- ${row.symbol}: price=${row.price}, change24h=${row.change}%, quoteVolume=${row.quoteVolume}\n")
+                }
+            }
+            ToolExecutionResult(output.trimEnd(), true, toolTitle = args.optString("tool_title", "读取币安实时行情"))
+        } catch (error: Throwable) {
+            ToolExecutionResult("Binance market request failed: ${binanceToolError(error)}", false, toolTitle = "binance_market")
+        }
+    }
+
+    private suspend fun executeBinanceAccountTool(argsJson: String): ToolExecutionResult {
+        return try {
+            val args = JSONObject(argsJson)
+            val product = parseBinanceProduct(args.optString("product"))
+            val mode = parseTradingMode(args.optString("mode"))
+            val credentials = BinanceCredentialStore.load(context, product, mode)
+                ?: return ToolExecutionResult("Binance API is not configured for ${product.label}/${mode.label}. Ask the user to configure credentials in the quant dashboard.", false, toolTitle = "binance_account")
+            val client = BinanceApiClient()
+            val tickers = client.load24hTickers(product, mode, listOf("BTCUSDT", "ETHUSDT", "BNBUSDT", "SOLUSDT"))
+            val account = client.loadAccount(product, mode, credentials, tickers)
+            val positions = if (product == BinanceProduct.USD_M_FUTURES) client.loadPositions(product, mode, credentials) else emptyList()
+            val openOrders = client.loadOpenOrders(product, mode, credentials)
+            val output = buildString {
+                append("Binance ${product.label} ${mode.label} account:\n")
+                append("- canTrade=${account.canTrade}\n")
+                append("- totalEquityUsdt=${account.totalEquityUsdt}\n")
+                append("- availableUsdt=${account.availableUsdt}\n")
+                append("- unrealizedPnlUsdt=${account.unrealizedPnlUsdt}\n")
+                append("- assets:\n")
+                account.assets.take(50).forEach { asset ->
+                    append("  - ${asset.asset}: free=${asset.free}, locked=${asset.locked}, valueUsdt=${asset.valueUsdt}\n")
+                }
+                if (positions.isNotEmpty()) {
+                    append("- positions:\n")
+                    positions.forEach { position ->
+                        append("  - ${position.symbol}: amount=${position.amount}, entry=${position.entryPrice}, mark=${position.markPrice}, unrealizedPnl=${position.unrealizedPnl}, leverage=${position.leverage}\n")
+                    }
+                }
+                append("- openOrders=${openOrders.size}\n")
+                openOrders.take(50).forEach { order ->
+                    append("  - ${order.symbol} ${order.side} ${order.type} id=${order.orderId} status=${order.status} qty=${order.executedQuantity}/${order.originalQuantity} price=${order.price}\n")
+                }
+            }
+            ToolExecutionResult(output.trimEnd(), true, toolTitle = args.optString("tool_title", "读取币安账户"))
+        } catch (error: Throwable) {
+            ToolExecutionResult("Binance account request failed: ${binanceToolError(error)}", false, toolTitle = "binance_account")
+        }
+    }
+
+    private suspend fun executeBinanceOrderBookTool(argsJson: String): ToolExecutionResult {
+        return try {
+            val args = JSONObject(argsJson)
+            val product = parseBinanceProduct(args.optString("product"))
+            val mode = parseTradingMode(args.optString("mode"))
+            val symbol = args.optString("symbol").trim().uppercase()
+            if (symbol.isBlank()) return ToolExecutionResult("Error: symbol is required", false, toolTitle = "binance_order_book")
+            val book = BinanceApiClient().loadOrderBook(product, mode, symbol, args.optInt("limit", 10).coerceIn(5, 20))
+            val output = buildString {
+                append("Binance ${product.label} ${mode.label} order book $symbol:\n")
+                append("asks:\n")
+                book.asks.take(10).forEach { append("- price=${it.price}, quantity=${it.quantity}\n") }
+                append("bids:\n")
+                book.bids.take(10).forEach { append("- price=${it.price}, quantity=${it.quantity}\n") }
+            }
+            ToolExecutionResult(output.trimEnd(), true, toolTitle = args.optString("tool_title", "读取币安实时盘口"))
+        } catch (error: Throwable) {
+            ToolExecutionResult("Binance order book request failed: ${binanceToolError(error)}", false, toolTitle = "binance_order_book")
+        }
+    }
+
+    private suspend fun executeBinancePlaceOrderTool(argsJson: String): ToolExecutionResult {
+        return try {
+            val args = JSONObject(argsJson)
+            val product = parseBinanceProduct(args.optString("product"))
+            val mode = parseTradingMode(args.optString("mode"))
+            val type = args.optString("type").trim().uppercase()
+            val order = BinanceOrderRequest(
+                symbol = args.optString("symbol").trim().uppercase(),
+                side = args.optString("side").trim().uppercase(),
+                type = type,
+                quantity = args.optString("quantity").trim(),
+                price = args.optString("price").trim().takeIf { it.isNotBlank() },
+            )
+            if (order.symbol.isBlank() || order.quantity.isBlank()) {
+                return ToolExecutionResult("Error: symbol and quantity are required", false, toolTitle = "binance_place_order")
+            }
+            if (order.side !in setOf("BUY", "SELL") || type !in setOf("MARKET", "LIMIT")) {
+                return ToolExecutionResult("Error: side must be BUY/SELL and type must be MARKET/LIMIT", false, toolTitle = "binance_place_order")
+            }
+            if (type == "LIMIT" && order.price == null) {
+                return ToolExecutionResult("Error: LIMIT order requires price", false, toolTitle = "binance_place_order")
+            }
+            val credentials = BinanceCredentialStore.load(context, product, mode)
+                ?: return ToolExecutionResult("Binance API is not configured for ${product.label}/${mode.label}", false, toolTitle = "binance_place_order")
+            val approved = BinanceApprovalStore.awaitOrderApproval(product, mode, order)
+            if (!approved) {
+                return ToolExecutionResult("Order was not sent: human approval was rejected or timed out.", false, toolTitle = "binance_place_order")
+            }
+            val result = BinanceApiClient().placeOrder(product, mode, credentials, order)
+            BinanceQuantEvents.emit("order_submitted")
+            ToolExecutionResult(
+                "Binance order accepted: orderId=${result.orderId}, status=${result.status}, executedQty=${result.executedQuantity}, avgPrice=${result.avgPrice}",
+                true,
+                toolTitle = args.optString("tool_title", "提交币安订单"),
+            )
+        } catch (error: Throwable) {
+            ToolExecutionResult("Binance order failed: ${binanceToolError(error)}", false, toolTitle = "binance_place_order")
+        }
+    }
+
+    private fun parseBinanceProduct(raw: String): BinanceProduct = when (raw.trim().lowercase()) {
+        "spot" -> BinanceProduct.SPOT
+        "usd_m_futures", "futures", "usds_m_futures" -> BinanceProduct.USD_M_FUTURES
+        else -> throw IllegalArgumentException("product must be spot or usd_m_futures")
+    }
+
+    private fun parseTradingMode(raw: String): TradingMode = when (raw.trim().lowercase()) {
+        "demo", "testnet" -> TradingMode.DEMO
+        "live", "production" -> TradingMode.LIVE
+        else -> throw IllegalArgumentException("mode must be demo or live")
+    }
+
+    private fun binanceToolError(error: Throwable): String = when (error) {
+        is BinanceApiException -> if (error.binanceCode != null) "${error.message} (${error.binanceCode})" else error.message
+        else -> error.message?.takeIf { it.isNotBlank() } ?: error.javaClass.simpleName
+    }
+
     /**
-     * Mirror of iOS AIChatViewModel post-tool hook (Agent/Chat/AIChatViewModel.swift:5387 / :5408):
-     * when the agent writes or edits a SKILL.md inside a `/skills/` directory
-     * we ask SkillRepository to re-scan disk so the new skill is visible
-     * immediately, without waiting for app restart.
+     * Mirror of iOS post-tool skill reload hook: when the agent writes or
+     * edits a SKILL.md, refresh the in-memory skill registry immediately.
      */
     private fun maybeReloadSkillsForPath(argsJson: String) {
         runCatching {
@@ -7986,7 +8138,18 @@ Memory system (currently DISABLED):
 - If the user asks why earlier memories aren't visible, or asks you to save something, tell them memory is currently disabled and point them at the /memory slash command or [Settings → Memory](minis://settings/memory) to re-enable it.
 - SOUL.md (personality / identity) is unaffected by this toggle; the persona section above still applies."""
         }
-        val base = identitySection + """You should proactively use shell commands to accomplish the user's tasks — installing packages (apk add), writing and running scripts, managing files, networking, and any other operations a Linux terminal can perform.
+        val base = identitySection + """You are Binance Quant Agent, an on-device trading research and execution assistant. The Binance dashboard and dedicated Binance tools are your primary product surface.
+
+Operating rules:
+- Use the dedicated binance_* tools for Binance data and orders; do not use shell_execute with curl to bypass the app API layer.
+- Never invent prices, balances, positions, order status, fills, PnL or strategy results. If a Binance request fails, report the exact failure.
+- API secrets are hidden from you and stay inside the app. Never ask the user to paste an API Secret into chat or shell.
+- Read market, account and order-book data before making a recommendation about current conditions.
+- binance_place_order always requires visible Android approval. A rejected or timed-out result means no order was sent.
+- Demo is the default. Treat LIVE as real-money execution and state product, environment, symbol, side, type, quantity and price before approval.
+- Do not claim to have started a background trading robot. Strategy automation must be explicitly configured and its actual status must come from the app.
+
+For non-trading tasks you may use the existing OpenMinis tools such as shell_execute, file tools, browser_use and memory tools.
 
 Available tools:
 - shell_execute: Run any shell command. Each invocation is an isolated process with stdout/stderr captured. Prefer this for most tasks — it is a real Linux environment with persistent filesystem. Common tools (python3, pip, curl, wget, git, ssh, etc.) can be installed via apk add; Python packages via pip install. Use `which <cmd>` to check if a tool is already installed before running apk add — many packages persist across sessions. When you need to wait before checking results (e.g. polling, waiting for a process), use the `delay` parameter instead of `sleep` in the command — delay blocks the agent flow without occupying the shell, so other concurrent tasks can use it during the wait. This avoids resource contention. Execution discipline for long-running or dispatched work: make tool calls immediately instead of describing intentions, and keep working until the task is complete. Without a scheduler or timed-callback tool, `delay` is your ONLY wait mechanism within a turn — to follow up on something still running, chain delay-then-check calls at a task-appropriate interval until you have the result or hit a sensible retry cap. NEVER end a turn with a promise of future action: 'I'll keep monitoring', 'will sync the result later', and ending right after a single still-running status check with 'let's keep waiting' are all the same violation — once your turn ends, NOTHING runs until the user's next message. If polling to completion is genuinely not worth blocking the turn, close honestly instead: state that the task keeps running in the background, that you will only learn its outcome when the user next messages (or they ask you to check), and — if something must fire on a schedule beyond this conversation — point them to the options under 'Scheduled tasks' later in this prompt (native alarm reminder or a system-level schedule; those notify the USER, they do not wake you).
