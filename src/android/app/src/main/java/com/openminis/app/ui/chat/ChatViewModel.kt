@@ -24,6 +24,7 @@ import androidx.compose.material.icons.outlined.Extension
 import com.openminis.app.data.BPETokenizer
 import com.openminis.app.data.ContextOffload
 import com.openminis.app.data.ContextPolicy
+import com.openminis.app.data.RequestToolPairingSanitizer
 import com.openminis.app.logging.AppLogger
 import com.openminis.app.data.FileMentionIndex
 import com.openminis.app.data.db.CompactMarkerEntity
@@ -6162,8 +6163,16 @@ class ChatViewModel(
                     // [_compactSummary] is prepended as a `<context-summary>`
                     // user message. Falls through to the raw agentHistory when
                     // no compact has happened, so the common path stays zero-copy.
+                    val budgetedHistory = applyRequestImageBudget(effectiveAgentHistory())
+                    val pairingRepair = RequestToolPairingSanitizer.sanitize(budgetedHistory)
+                    if (pairingRepair.removedOrphanResults > 0 || pairingRepair.insertedMissingResults > 0) {
+                        AppLogger.warning(
+                            TAG_STREAM,
+                            "[RequestPairing] repaired final context: removedOrphanResults=${pairingRepair.removedOrphanResults} insertedMissingResults=${pairingRepair.insertedMissingResults}",
+                        )
+                    }
                     currentProvider.streamMessage(
-                        applyRequestImageBudget(effectiveAgentHistory()),
+                        pairingRepair.messages,
                         systemPrompt, dynamicMaxTokens(currentProvider, lastContextTokens),
                         tools = agentTools,
                         thinkingLevel = if (currentModelSupportsReasoning) _thinkingLevel.value else ThinkingLevel.OFF,
