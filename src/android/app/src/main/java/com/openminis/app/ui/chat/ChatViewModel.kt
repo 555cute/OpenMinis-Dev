@@ -709,6 +709,22 @@ class ChatViewModel(
     private val _isCompacting = MutableStateFlow(false)
     val isCompacting: StateFlow<Boolean> = _isCompacting.asStateFlow()
 
+    /**
+     * A user send held while automatic context compaction runs. The composer is
+     * cleared before [sendMessage] is called, so we retain both text and staged
+     * attachments here and replay the exact send only after compaction succeeds.
+     * A second send while compaction is active is appended to this list instead
+     * of being dropped.
+     */
+    private data class PendingAutoCompactSend(
+        val text: String,
+        val attachments: List<InputAttachment>,
+    )
+
+    private val pendingAutoCompactSends = mutableListOf<PendingAutoCompactSend>()
+    private var autoCompactInFlight = false
+    private var bypassAutoCompactOnce = false
+
     /** Current auto-retry attempt number (0 = not retrying, 1..MAX = nth retry in flight). */
     private val _autoRetryAttempt = MutableStateFlow(0)
     val autoRetryAttempt: StateFlow<Int> = _autoRetryAttempt.asStateFlow()
@@ -1521,7 +1537,10 @@ class ChatViewModel(
         compactAll(anchorIdxOverride = idx)
     }
 
-    private fun compactAll(anchorIdxOverride: Int? = null) {
+    private fun compactAll(
+        anchorIdxOverride: Int? = null,
+        onComplete: ((Boolean) -> Unit)? = null,
+    ) {
         AppLogger.info(TAG, "[Compact] compactAll() invoked streaming=${_isStreaming.value} compacting=${_isCompacting.value} historySize=${agentHistory.size} anchorOverride=$anchorIdxOverride")
         if (_isStreaming.value) {
             AppLogger.info(TAG, "[Compact] aborted: stream in progress")
@@ -1529,6 +1548,7 @@ class ChatViewModel(
                 text = "Cannot compact while a turn is in progress. Stop the current response first.",
                 iconKind = "compact",
             )
+            onComplete?.invoke(false)
             return
         }
         if (_isCompacting.value) {
@@ -1537,15 +1557,18 @@ class ChatViewModel(
                 text = "A compact is already in progress. Please wait for it to finish.",
                 iconKind = "compact",
             )
+            onComplete?.invoke(false)
             return
         }
         val provider = currentProvider ?: run {
             appendSystemInfo("No provider configured. Cannot compact.", "compact")
+            onComplete?.invoke(false)
             return
         }
         val history = agentHistory.toList()
         if (history.isEmpty()) {
             appendSystemInfo("Nothing to compact — the session is empty.", "compact")
+            onComplete?.invoke(false)
             return
         }
         // ─── v2 unified anchor model ───────────────────────────────────
@@ -1589,6 +1612,7 @@ class ChatViewModel(
         }
         if (anchorIdx < 0) {
             appendSystemInfo("Cannot compact: no persisted messages yet.", "compact")
+            onComplete?.invoke(false)
             return
         }
 
@@ -1615,11 +1639,13 @@ class ChatViewModel(
         }
         if (effectiveStartIdx > anchorIdx) {
             appendSystemInfo("Already compacted up to this point.", "compact")
+            onComplete?.invoke(false)
             return
         }
         val toCompact = history.subList(effectiveStartIdx, anchorIdx + 1)
         if (toCompact.isEmpty()) {
             appendSystemInfo("Nothing to compact.", "compact")
+            onComplete?.invoke(false)
             return
         }
         _isCompacting.value = true
@@ -1713,10 +1739,12 @@ class ChatViewModel(
                     lastCompactedMessageId = lastCompactedDbId,
                     version = 2,
                 )
-                runCatching { chatRepository.dao.insertCompactMarker(marker) }
-                    .onFailure {
-                        Log.w(TAG, "Failed to persist compact marker: ${it.message}")
-                    }
+                try {
+                    chatRepository.dao.insertCompactMarker(marker)
+                } catch (e: Exception) {
+                    Log.w(TAG, "Failed to persist compact marker: ${e.message}")
+                    throw IllegalStateException("Could not persist compact summary", e)
+                }
                 _compactSummary.value = summary
                 // Keep the marker in memory so effectiveAgentHistory() can
                 // resolve the boundary on the very next outgoing turn.
@@ -1793,6 +1821,9 @@ class ChatViewModel(
                 }
             } finally {
                 _isCompacting.value = false
+                withContext(Dispatchers.Main) {
+                    onComplete?.invoke(compactSucceeded)
+                }
             }
             // [T-android-compact-queued-drain] A successful compact must let
             // any queued prompts proceed — previously nothing re-triggered the
@@ -2488,28 +2519,108 @@ class ChatViewModel(
     }
 
     /**
-     * Consult [ContextPolicy] before sending. Returns true to proceed. The
-     * Android MVP doesn't surface a "Compact before send" dialog (iOS does),
-     * so we only warn via [appendSystemInfo] at the `needsCompact` /
-     * `exhausted` boundaries and still allow the send. That gives the user
-     * a signal to invoke `/compact` explicitly without blocking their turn.
+     * Automatically compact before a fresh user send once the active model's
+     * context policy crosses its compact threshold. The send is retained and
+     * replayed after the compact marker is committed, so the triggering user
+     * message never enters the oversized pre-compact request.
+     *
+     * Returns true when this invocation has taken ownership of the send.
+     */
+    private fun autoCompactBeforeSendIfNeeded(text: String): Boolean {
+        val attachments = _attachments.value
+
+        // A second tap while OUR automatic compact is running must not be
+        // dropped. Keep it in order and consume its staged attachments.
+        if (autoCompactInFlight) {
+            pendingAutoCompactSends.add(PendingAutoCompactSend(text, attachments))
+            clearAttachments()
+            AppLogger.info(TAG, "[AutoCompact] retained send while compacting; pending=${pendingAutoCompactSends.size}")
+            return true
+        }
+
+        val reportedTokens = _lastTurnContextTokens.value
+        val estimatedTokens = estimateContextTokens(effectiveAgentHistory())
+        val tokens = maxOf(reportedTokens, estimatedTokens)
+        if (tokens <= 0) return false
+        val window = effectiveContextWindowTokens() ?: return false
+        val policy = ContextPolicy.forContextWindow(window)
+        return when (policy.check(tokens, window)) {
+            ContextPolicy.CheckResult.OK -> false
+            ContextPolicy.CheckResult.NEEDS_COMPACT -> {
+                pendingAutoCompactSends.add(PendingAutoCompactSend(text, attachments))
+                clearAttachments()
+                autoCompactInFlight = true
+                appendSystemInfo(
+                    text = "Context reached $tokens / $window tokens. Compacting automatically before sending…",
+                    iconKind = "compact",
+                )
+                AppLogger.info(TAG, "[AutoCompact] threshold crossed: $tokens/$window; retained send and starting compact")
+                compactAll(onComplete = ::finishAutoCompact)
+                true
+            }
+            ContextPolicy.CheckResult.EXHAUSTED -> false
+        }
+    }
+
+    /** Resume retained sends on success; restore them to the composer on failure. */
+    private fun finishAutoCompact(succeeded: Boolean) {
+        val pending = pendingAutoCompactSends.toList()
+        pendingAutoCompactSends.clear()
+        autoCompactInFlight = false
+
+        if (!succeeded) {
+            if (pending.isNotEmpty()) {
+                val restoredText = pending.map { it.text }.filter { it.isNotBlank() }.joinToString("\n\n")
+                _inputText.value = listOf(restoredText, _inputText.value)
+                    .filter { it.isNotBlank() }
+                    .joinToString("\n\n")
+                _attachments.value = (_attachments.value + pending.flatMap { it.attachments })
+                    .distinctBy { it.id }
+            }
+            appendSystemInfo(
+                text = "Automatic compaction failed. Your unsent message was restored to the composer.",
+                iconKind = "compact",
+            )
+            AppLogger.warning(TAG, "[AutoCompact] failed; restored ${pending.size} retained send(s)")
+            return
+        }
+
+        // The old API-reported count describes the pre-compact request. Clear
+        // it so replay cannot immediately trigger a second compact before the
+        // provider reports the new, smaller context size.
+        _lastTurnContextTokens.value = 0
+        appendSystemInfo(
+            text = "Automatic compaction complete. Sending your message now.",
+            iconKind = "compact",
+        )
+        AppLogger.info(TAG, "[AutoCompact] success; replaying ${pending.size} retained send(s)")
+
+        // sendMessage claims _isStreaming synchronously. Any later retained
+        // sends therefore flow through the normal prompt queue and preserve
+        // ordering rather than starting concurrent agent loops.
+        for ((index, send) in pending.withIndex()) {
+            _attachments.value = send.attachments
+            // Only the first replay reaches the fresh-send pressure gate. Once
+            // it claims streaming, later retained sends take the queue branch
+            // before that gate and therefore need no bypass flag.
+            if (index == 0) bypassAutoCompactOnce = true
+            sendMessage(send.text)
+        }
+    }
+
+    /**
+     * Retained for callers that only need a non-blocking warning (small-window
+     * tiers where ContextPolicy deliberately disables automatic compaction).
      */
     private fun checkContextBeforeSend(): Boolean {
-        val tokens = _lastTurnContextTokens.value
+        val reportedTokens = _lastTurnContextTokens.value
+        val tokens = maxOf(reportedTokens, estimateContextTokens(effectiveAgentHistory()))
         if (tokens <= 0) return true
-        // [T-context-window-live-read] Live window (entry re-resolved + group
-        // contextLimitTokens folded in) — not the currentModel snapshot.
         val window = effectiveContextWindowTokens() ?: return true
         val policy = ContextPolicy.forContextWindow(window)
         return when (policy.check(tokens, window)) {
-            ContextPolicy.CheckResult.OK -> true
-            ContextPolicy.CheckResult.NEEDS_COMPACT -> {
-                appendSystemInfo(
-                    text = "Context is getting full ($tokens / $window tokens). Consider running /compact to fold older turns into a summary.",
-                    iconKind = "compact",
-                )
-                true
-            }
+            ContextPolicy.CheckResult.OK,
+            ContextPolicy.CheckResult.NEEDS_COMPACT -> true
             ContextPolicy.CheckResult.EXHAUSTED -> {
                 appendSystemInfo(
                     text = "Context is near the model's limit ($tokens / $window tokens). Start a new chat or /compact to continue reliably.",
@@ -3798,6 +3909,10 @@ class ChatViewModel(
         _canResume.value = false
         _attachments.value = emptyList()
         _promptQueue.value = emptyList()
+        pendingAutoCompactSends.clear()
+        autoCompactInFlight = false
+        bypassAutoCompactOnce = false
+        _lastTurnContextTokens.value = 0
         _hasInjectedShareContent.value = false
         // T261: tool-detail sheet is per-session UI state — clear it so a
         // newly cleared chat doesn't briefly flash a stale tool's sheet
@@ -4802,16 +4917,27 @@ class ChatViewModel(
         // an empty text + non-empty attachments still produces a valid user
         // message. Without this an image-only "look at this" send dropped.
         if (trimmed.isBlank() && _attachments.value.isEmpty()) return
+        // The first replay immediately after a successful compact bypasses the
+        // pressure gate once. Its estimate intentionally includes the retained
+        // recent-turn lookback and may still be conservative; the next provider
+        // usage event becomes the authoritative post-compact baseline.
+        if (bypassAutoCompactOnce) {
+            bypassAutoCompactOnce = false
+        } else if (autoCompactBeforeSendIfNeeded(trimmed)) {
+            return
+        }
         if (_isCompacting.value) {
+            // ChatScreen clears the composer before dispatch. Restore this
+            // rejected send so a MANUAL /compact cannot silently eat it.
+            _inputText.value = listOf(trimmed, _inputText.value)
+                .filter { it.isNotBlank() }
+                .joinToString("\n\n")
             appendSystemInfo(
-                text = "Wait for the current compact to finish before sending.",
+                text = "Wait for the current compact to finish before sending. Your message was restored to the composer.",
                 iconKind = "compact",
             )
             return
         }
-        // Non-blocking context pressure check — emits a system notice at the
-        // needsCompact / exhausted thresholds but still lets the send proceed.
-        // The user invokes /compact explicitly to fold history when warned.
         checkContextBeforeSend()
         // A fresh send supersedes any pending resume — mirror iOS which clears
         // canResume at the top of send().
@@ -5522,10 +5648,25 @@ class ChatViewModel(
      * offload itself uses precise [BPETokenizer.countTokens] per-part
      * for the candidate ranking.
      */
-    private fun estimateContextTokens(): Int {
+    private fun estimateContextTokens(messages: List<LLMMessage> = agentHistory): Int {
         var totalChars = 0
         var imageTokens = 0
-        for (msg in agentHistory) {
+        for (msg in messages) {
+            if (msg.contentParts.isEmpty()) {
+                totalChars += msg.content.length
+                for (image in msg.imageParts) {
+                    imageTokens += BPETokenizer.countImageTokens(image.data)
+                }
+                continue
+            }
+            // Structured messages commonly mirror their text in `content` and
+            // a Text part. Count the structured representation once; compacted
+            // summary injection lives in `content`, so include any prefix that
+            // is not duplicated by the text parts.
+            val structuredText = msg.contentParts
+                .filterIsInstance<AgentContentPart.Text>()
+                .sumOf { it.text.length }
+            if (msg.content.length > structuredText) totalChars += msg.content.length - structuredText
             for (part in msg.contentParts) {
                 when (part) {
                     is AgentContentPart.Text -> totalChars += part.text.length
