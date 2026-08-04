@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">Minis</string>
+    <string name="app_name">Minis·AutoCompact</string>
     <string name="new_chat">Новый чат</string>
     <string name="settings">Настройки</string>
     <string name="providers">Провайдеры</string>
@@ -922,7 +922,7 @@
     <string name="chat_clear_dialog_body">Удалить все сообщения из этой сессии? Файлы в рабочей области, вложения и выгрузки сохранятся.</string>
     <string name="chat_clear_dialog_confirm">Очистить</string>
     <string name="settings_shared_folders">Общие папки</string>
-    <string name="settings_shared_folders_subtitle">Просмотр общей папки /var/minis, навыков и памяти</string>
+    <string name="settings_shared_folders_subtitle">Просмотр общей папки /var/minis-autocompact, навыков и памяти</string>
     <string name="shared_folders_title">Общие папки</string>
     <string name="shared_folders_info_banner">Эти каталоги видны внутри Linux-песочницы. Навыки и Память поддерживаются инструментами ИИ-агента — не редактируйте вручную.</string>
     <string name="shared_folder_name_shared">Общее</string>
@@ -931,16 +931,16 @@
     <string name="shared_folder_detail_title">Сведения о папке</string>
     <string name="shared_folder_browse_files">Просмотр файлов</string>
     <string name="settings_mount_external_folders">Подключить внешние папки</string>
-    <string name="settings_mount_external_folders_subtitle">Привязать выбранные папки к /var/minis/mounts/</string>
+    <string name="settings_mount_external_folders_subtitle">Привязать выбранные папки к /var/minis-autocompact/mounts/</string>
     <string name="mount_folders_title">Подключённые папки</string>
-    <string name="mount_folders_info_banner">Выбранные папки монтируются по привязке в /var/minis/mounts/&lt;name&gt;. Одновременно можно подключить до 10 папок.</string>
+    <string name="mount_folders_info_banner">Выбранные папки монтируются по привязке в /var/minis-autocompact/mounts/&lt;name&gt;. Одновременно можно подключить до 10 папок.</string>
     <string name="mount_folders_empty_title">Нет подключённых папок</string>
     <string name="mount_folders_empty_subtitle">Нажмите +, чтобы выбрать папку</string>
     <string name="mount_folders_limit_reached">Достигнут лимит подключений (10)</string>
     <string name="mount_add_dialog_title">Добавить подключение</string>
     <string name="mount_add_source_path">Исходный путь</string>
     <string name="mount_add_name_label">Имя подключения</string>
-    <string name="mount_add_name_hint">Это будет имя папки в /var/minis/mounts/</string>
+    <string name="mount_add_name_hint">Это будет имя папки в /var/minis-autocompact/mounts/</string>
     <string name="mount_add_allow_writes">Разрешить запись</string>
     <string name="mount_add_allow_writes_desc">Если выключено, инструменты file_write/file_edit отклоняют запись; оболочка всё равно может это обойти.</string>
     <string name="mount_add_confirm">Добавить</string>
@@ -1190,7 +1190,7 @@
     <string name="mcp_add">Добавить сервер MCP</string>
     <string name="mcp_edit">Изменить сервер MCP</string>
     <string name="mcp_section_servers">Серверы</string>
-    <string name="mcp_section_footer">Серверы MCP позволяют агенту вызывать внешние инструменты через minis-mcp-cli. Конфигурация хранится в /var/minis/mcp-servers/servers.json (совместимо с Claude Desktop).</string>
+    <string name="mcp_section_footer">Серверы MCP позволяют агенту вызывать внешние инструменты через minis-mcp-cli. Конфигурация хранится в /var/minis-autocompact/mcp-servers/servers.json (совместимо с Claude Desktop).</string>
     <string name="mcp_empty_title">Нет серверов MCP</string>
     <string name="mcp_empty_action">Добавьте сервер кнопкой +.</string>
     <string name="mcp_transport_http">HTTP</string>

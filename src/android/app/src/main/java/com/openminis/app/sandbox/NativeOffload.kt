@@ -3,6 +3,7 @@ package com.openminis.app.sandbox
 import android.net.LocalServerSocket
 import android.net.LocalSocket
 import android.util.Log
+import com.openminis.app.BuildConfig
 import java.io.DataInputStream
 import java.io.DataOutputStream
 import java.io.File
@@ -52,12 +53,14 @@ fun interface NativeOffloadHandler {
 
 object NativeOffloadServer {
     private const val TAG = "NativeOffloadServer"
-    private const val SOCKET_NAME = "native-offload"
+    private const val SOCKET_NAME_PREFIX = "native-offload"
     private const val MAGIC_REQ = 0x46464F4E  // 'N' 'O' 'F' 'F' little-endian
     private const val MAGIC_RSP = 0x52464F4E  // 'N' 'O' 'F' 'R'
     private const val VERSION = 1
 
-    const val socketName: String = SOCKET_NAME
+    /** The socket is unique across installed app packages and app processes. */
+    val socketName: String
+        get() = "$SOCKET_NAME_PREFIX-${BuildConfig.APPLICATION_ID}-${android.os.Process.myPid()}"
 
     private val handlers = ConcurrentHashMap<String, NativeOffloadHandler>()
     private val counter = AtomicLong(0)
@@ -90,26 +93,27 @@ object NativeOffloadServer {
         // re-spawn …). Retry up to ~2s with exponential backoff; in the
         // overwhelming majority of cases the socket frees within the first
         // 100-300ms window.
-        val s = bindWithRetry()
+        val socket = socketName
+        val s = bindWithRetry(socket)
             ?: throw java.io.IOException(
-                "failed to bind abstract socket '$SOCKET_NAME' after retries — " +
+                "failed to bind abstract socket '$socket' after retries — " +
                 "previous process holding the namespace?",
             )
         serverSocket = s
         acceptThread = thread(name = "native-offload-accept", isDaemon = true) {
             runAcceptLoop(s)
         }
-        Log.i(TAG, "listening on abstract socket '$SOCKET_NAME' " +
+        Log.i(TAG, "listening on abstract socket '$socket' " +
             "handlers=${handlers.keys.sorted()} tmpDir=${rootfsTmpDir?.absolutePath}")
     }
 
-    private fun bindWithRetry(): LocalServerSocket? {
+    private fun bindWithRetry(socketName: String): LocalServerSocket? {
         // Backoff schedule: 0, 50, 100, 200, 400, 800 ms — total ~1.55s.
         val delays = longArrayOf(0L, 50L, 100L, 200L, 400L, 800L)
         for ((attempt, delay) in delays.withIndex()) {
             if (delay > 0) Thread.sleep(delay)
             try {
-                return LocalServerSocket(SOCKET_NAME)
+                return LocalServerSocket(socketName)
             } catch (e: java.io.IOException) {
                 Log.w(TAG, "bind attempt ${attempt + 1}/${delays.size} failed: ${e.message}")
             }

@@ -79,11 +79,11 @@ fun StorageManagementScreen(
         scope.launch {
             isLoading = true
             withContext(Dispatchers.IO) {
-                shellSize = directorySize(File(context.filesDir, "alpine-rootfs"))
+                shellSize = directorySize(File(context.filesDir, "alpine-rootfs-autocompact"))
                 dbSize = databaseSize(context)
 
                 val allSessions = chatDao.listSessions()
-                val sessionsDir = File(context.filesDir, "minis-sessions")
+                val sessionsDir = File(context.filesDir, "minis-autocompact-sessions")
                 val mediaDir = File(context.filesDir, "media")
 
                 val mediaSizes = mediaSizesBySession(mediaDir, allSessions.map { it.id }.toSet())
@@ -177,7 +177,7 @@ fun SessionStorageDetailScreen(
     var isClearing by remember { mutableStateOf(false) }
     var showClearDialog by remember { mutableStateOf(false) }
 
-    val sessionsDir = File(context.filesDir, "minis-sessions")
+    val sessionsDir = File(context.filesDir, "minis-autocompact-sessions")
     val mediaDir = File(context.filesDir, "media")
 
     fun reload() {

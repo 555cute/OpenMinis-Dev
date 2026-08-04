@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">Minis</string>
+    <string name="app_name">Minis·AutoCompact</string>
     <string name="new_chat">新对话</string>
     <string name="settings">设置</string>
     <string name="providers">AI 服务商</string>
@@ -985,7 +985,7 @@
 
     <!-- T235 — 共享文件夹（固定: 共享 / 技能 / 记忆） -->
     <string name="settings_shared_folders">共享文件夹</string>
-    <string name="settings_shared_folders_subtitle">浏览 /var/minis 下的共享、技能、记忆目录</string>
+    <string name="settings_shared_folders_subtitle">浏览 /var/minis-autocompact 下的共享、技能、记忆目录</string>
     <string name="shared_folders_title">共享文件夹</string>
     <string name="shared_folders_info_banner">这些目录在 Linux 沙箱内可见，技能与记忆由 AI 代理工具自动维护，请勿手动修改。</string>
     <string name="shared_folder_name_shared">共享</string>
@@ -996,16 +996,16 @@
 
     <!-- T219-2 — 挂载外部文件夹 -->
     <string name="settings_mount_external_folders">挂载外部文件夹</string>
-    <string name="settings_mount_external_folders_subtitle">将选定文件夹绑定到 /var/minis/mounts/</string>
+    <string name="settings_mount_external_folders_subtitle">将选定文件夹绑定到 /var/minis-autocompact/mounts/</string>
     <string name="mount_folders_title">已挂载文件夹</string>
-    <string name="mount_folders_info_banner">所选文件夹会被绑定到 /var/minis/mounts/&lt;name&gt;。最多可同时挂载 10 个文件夹。</string>
+    <string name="mount_folders_info_banner">所选文件夹会被绑定到 /var/minis-autocompact/mounts/&lt;name&gt;。最多可同时挂载 10 个文件夹。</string>
     <string name="mount_folders_empty_title">尚未挂载文件夹</string>
     <string name="mount_folders_empty_subtitle">点击 + 选择文件夹</string>
     <string name="mount_folders_limit_reached">已达挂载上限（10 个）</string>
     <string name="mount_add_dialog_title">新增挂载</string>
     <string name="mount_add_source_path">源路径</string>
     <string name="mount_add_name_label">挂载名称</string>
-    <string name="mount_add_name_hint">将作为 /var/minis/mounts/ 下的文件夹名</string>
+    <string name="mount_add_name_hint">将作为 /var/minis-autocompact/mounts/ 下的文件夹名</string>
     <string name="mount_add_allow_writes">允许写入</string>
     <string name="mount_add_allow_writes_desc">关闭后，file_write/file_edit 工具将拒绝写入；但 shell 仍可绕过此限制。</string>
     <string name="mount_add_confirm">添加</string>
@@ -1208,7 +1208,7 @@
     <string name="mcp_add">添加 MCP 服务器</string>
     <string name="mcp_edit">编辑 MCP 服务器</string>
     <string name="mcp_section_servers">服务器</string>
-    <string name="mcp_section_footer">MCP 服务器让 AI 通过 minis-mcp-cli 调用外部工具。配置保存在 /var/minis/mcp-servers/servers.json（与 Claude Desktop 兼容）。</string>
+    <string name="mcp_section_footer">MCP 服务器让 AI 通过 minis-mcp-cli 调用外部工具。配置保存在 /var/minis-autocompact/mcp-servers/servers.json（与 Claude Desktop 兼容）。</string>
     <string name="mcp_empty_title">暂无 MCP 服务器</string>
     <string name="mcp_empty_action">点击 + 按钮添加服务器。</string>
     <string name="mcp_transport_http">HTTP</string>

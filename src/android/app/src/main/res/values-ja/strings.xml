@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">Minis</string>
+    <string name="app_name">Minis·AutoCompact</string>
     <string name="new_chat">新しいチャット</string>
     <string name="settings">設定</string>
     <string name="providers">AIプロバイダー</string>
@@ -802,7 +802,7 @@
 
     <!-- T235 — 共有フォルダ（固定: 共有 / スキル / メモリ） -->
     <string name="settings_shared_folders">共有フォルダ</string>
-    <string name="settings_shared_folders_subtitle">/var/minis の共有・スキル・メモリを参照</string>
+    <string name="settings_shared_folders_subtitle">/var/minis-autocompact の共有・スキル・メモリを参照</string>
     <string name="shared_folders_title">共有フォルダ</string>
     <string name="shared_folders_info_banner">これらのディレクトリは Linux サンドボックス内から参照できます。Skills と Memory は AI エージェントのツールが管理します — 手動で編集しないでください。</string>
     <string name="shared_folder_name_shared">共有</string>
@@ -813,16 +813,16 @@
 
     <!-- T219-2 — 外部フォルダのマウント -->
     <string name="settings_mount_external_folders">外部フォルダをマウント</string>
-    <string name="settings_mount_external_folders_subtitle">選択したフォルダを /var/minis/mounts/ にバインド</string>
+    <string name="settings_mount_external_folders_subtitle">選択したフォルダを /var/minis-autocompact/mounts/ にバインド</string>
     <string name="mount_folders_title">マウント済みフォルダ</string>
-    <string name="mount_folders_info_banner">選択したフォルダは /var/minis/mounts/&lt;name&gt; にバインドマウントされます。同時に最大 10 個までマウントできます。</string>
+    <string name="mount_folders_info_banner">選択したフォルダは /var/minis-autocompact/mounts/&lt;name&gt; にバインドマウントされます。同時に最大 10 個までマウントできます。</string>
     <string name="mount_folders_empty_title">マウント済みフォルダはありません</string>
     <string name="mount_folders_empty_subtitle">+ をタップしてフォルダを選択</string>
     <string name="mount_folders_limit_reached">マウント上限に達しました（10 個）</string>
     <string name="mount_add_dialog_title">マウントを追加</string>
     <string name="mount_add_source_path">ソースパス</string>
     <string name="mount_add_name_label">マウント名</string>
-    <string name="mount_add_name_hint">/var/minis/mounts/ 配下のフォルダ名になります</string>
+    <string name="mount_add_name_hint">/var/minis-autocompact/mounts/ 配下のフォルダ名になります</string>
     <string name="mount_add_allow_writes">書き込みを許可</string>
     <string name="mount_add_allow_writes_desc">オフにすると file_write / file_edit ツールは書き込みを拒否しますが、shell からは依然として書き込めます。</string>
     <string name="mount_add_confirm">追加</string>
@@ -973,7 +973,7 @@
     <string name="mcp_add">MCP サーバーを追加</string>
     <string name="mcp_edit">MCP サーバーを編集</string>
     <string name="mcp_section_servers">サーバー</string>
-    <string name="mcp_section_footer">MCP サーバーを使うと、エージェントが minis-mcp-cli を介して外部ツールを呼び出せます。設定は /var/minis/mcp-servers/servers.json に保存されます（Claude Desktop 互換）。</string>
+    <string name="mcp_section_footer">MCP サーバーを使うと、エージェントが minis-mcp-cli を介して外部ツールを呼び出せます。設定は /var/minis-autocompact/mcp-servers/servers.json に保存されます（Claude Desktop 互換）。</string>
     <string name="mcp_empty_title">MCP サーバーがありません</string>
     <string name="mcp_empty_action">+ ボタンでサーバーを追加します。</string>
     <string name="mcp_transport_http">HTTP</string>

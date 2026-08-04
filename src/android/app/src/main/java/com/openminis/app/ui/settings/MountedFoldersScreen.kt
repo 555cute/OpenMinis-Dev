@@ -481,7 +481,7 @@ private fun MountRow(
                 AccessBadge(entry = entry)
             }
             Text(
-                text = "/var/minis/mounts/${entry.name}",
+                text = "/var/minis-autocompact/mounts/${entry.name}",
                 style = MaterialTheme.typography.bodySmall,
                 fontFamily = FontFamily.Monospace,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,

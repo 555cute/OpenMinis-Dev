@@ -14,6 +14,7 @@ import android.view.Display
 import android.view.accessibility.AccessibilityEvent
 import android.view.accessibility.AccessibilityNodeInfo
 import androidx.annotation.RequiresApi
+import com.openminis.app.BuildConfig
 import com.openminis.app.logging.AppLogger
 import java.util.concurrent.ConcurrentLinkedQueue
 import java.util.concurrent.CopyOnWriteArrayList
@@ -29,7 +30,9 @@ class MinisAccessibilityService : AccessibilityService() {
 
     companion object {
         private const val TAG = "MinisA11y"
-        const val SERVICE_ID = "com.openminis.app/.accessibility.MinisAccessibilityService"
+    /** Runtime component name used by android-a11y-cli and system settings. */
+    val SERVICE_ID: String
+        get() = "${BuildConfig.APPLICATION_ID}/com.openminis.app.accessibility.MinisAccessibilityService"
         private const val EVENT_RING_CAP = 1024
 
         @Volatile

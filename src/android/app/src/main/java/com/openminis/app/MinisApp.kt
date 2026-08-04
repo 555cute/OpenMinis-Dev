@@ -289,7 +289,7 @@ class MinisApp : Application(), ImageLoaderFactory {
         envVarRepository = EnvVarRepository(this)
         skillRepository = SkillRepository(this)
         mcpRepository = MCPRepository(this)
-        memoryRepository = MemoryRepository(java.io.File(filesDir, "minis-global/memory"))
+        memoryRepository = MemoryRepository(java.io.File(filesDir, "minis-autocompact-global/memory"))
         webAppShortcutRepository = WebAppShortcutRepository(database.webAppShortcutDao())
 
         // [T-soul-md] Seed SOUL.md with the default content on first launch
@@ -329,14 +329,14 @@ class MinisApp : Application(), ImageLoaderFactory {
         // DNS servers after Wi-Fi ↔ cellular swaps or VPN toggles.
         networkMonitor.start(this)
 
-        // Register global /var/minis/{memory,skills,shared} bind mounts up-front
+        // Register global /var/minis-autocompact/{memory,skills,shared} bind mounts up-front
         // so direct file I/O tools (file_read) resolve these paths even before
         // PRoot has booted or any shell has started.
         PRootKernel.registerGlobalBindMounts(this)
 
         // T219-1: load user-mounted external folders and seed PRoot's
         // bindMounts before the first proot invocation, so the very first
-        // `shell_execute` already has `/var/minis/mounts/<name>/` visible.
+        // `shell_execute` already has `/var/minis-autocompact/mounts/<name>/` visible.
         // Entries whose SAF tree URI didn't resolve to a real POSIX path
         // (cloud providers, unmounted SD card) are silently skipped by
         // bindMountSpecs.
@@ -357,7 +357,7 @@ class MinisApp : Application(), ImageLoaderFactory {
         }
         // T219-6: route launch-time seeding through applyMountedFoldersSnapshot
         // so it (a) reads the live store consistently and (b) materializes the
-        // /var/minis/mounts/<name> placeholder dirs that PRoot's `-b` needs.
+        // /var/minis-autocompact/mounts/<name> placeholder dirs that PRoot's `-b` needs.
         // Note: this runs before PRootKernel.boot, so rootfs may not yet exist —
         // applyMountedFoldersSnapshot tolerates that case (mkdirs fails silently
         // and PRootKernel.boot calls applyMountedFoldersSnapshot again at the
@@ -692,9 +692,9 @@ class MinisApp : Application(), ImageLoaderFactory {
     }
 
     /**
-     * Coil global ImageLoader — registers [MinisImageFetcher] so `minis://`
-     * URIs in Markdown images (e.g. `![alt](minis://attachments/x.png)`)
-     * resolve to local files under /var/minis/.
+     * Coil global ImageLoader — registers [MinisImageFetcher] so `minis-ac://`
+     * URIs in Markdown images (e.g. `![alt](minis-ac://attachments/x.png)`)
+     * resolve to local files under /var/minis-autocompact/.
      */
     override fun newImageLoader(): ImageLoader =
         ImageLoader.Builder(this)
@@ -703,7 +703,7 @@ class MinisApp : Application(), ImageLoaderFactory {
                 add(MinisImageFetcher.UriFactory())
                 // T-image-cache-mtime-35133: include File.lastModified() in
                 // memory + disk cache key so Grok-style in-place rewrites of
-                // minis://attachments/foo.jpg invalidate Coil's cached bitmap.
+                // minis-ac://attachments/foo.jpg invalidate Coil's cached bitmap.
                 add(MinisImageFetcher.MtimeKeyer())
                 add(MinisImageFetcher.StringMtimeKeyer())
             }

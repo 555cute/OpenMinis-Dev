@@ -64,7 +64,7 @@
          readdir a mounted external folder. Capped at API 29 — ignored on 11+. -->
     <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" android:maxSdkVersion="29" />
     <!-- T219: Mount External Folders bind-mounts SAF-picked tree URIs into
-         /var/minis/mounts/ via PRoot. PRoot's bind translates `readdir(/var/minis/mounts/X)`
+         /var/minis-autocompact/mounts/ via PRoot. PRoot's bind translates `readdir(/var/minis-autocompact/mounts/X)`
          into a host-side `readdir(/storage/emulated/0/...)` running as the app uid.
          Without MANAGE_EXTERNAL_STORAGE, FuseDaemon (MediaProvider) silently filters
          out files owned by other packages from getdents64 results — so an Obsidian
@@ -179,13 +179,13 @@
                  itself never appears in the launcher directly, but all
                  internal Intent(this, MainActivity::class.java) startActivity
                  calls keep working because MainActivity is always enabled.
-                 The minis:// deep-link filter stays on MainActivity since
+                 The minis-ac:// deep-link filter stays on MainActivity since
                  deep-links never go through the LAUNCHER category. -->
             <intent-filter>
                 <action android:name="android.intent.action.VIEW" />
                 <category android:name="android.intent.category.DEFAULT" />
                 <category android:name="android.intent.category.BROWSABLE" />
-                <data android:scheme="minis" />
+                <data android:scheme="minis-ac" />
             </intent-filter>
         </activity>
 
@@ -210,7 +210,7 @@
             <!-- T-android-app-icon-shortcuts: app-icon long-press quick
                  actions (mirrors iOS QuickActionRouter / UIApplicationShortcutItem).
                  Three static shortcuts (new_chat / voice_chat / camera_chat)
-                 launch MainActivity via minis://action/<name> deep-link.
+                 launch MainActivity via minis-ac://action/<name> deep-link.
                  The shortcuts meta-data must live on the alias that owns
                  the LAUNCHER filter, not on MainActivity itself. -->
             <meta-data
@@ -353,7 +353,7 @@
             android:excludeFromRecents="false"
             android:theme="@style/Theme.Minis">
             <intent-filter>
-                <action android:name="com.openminis.app.action.OPEN_WEBAPP" />
+                <action android:name="${applicationId}.action.OPEN_WEBAPP" />
                 <category android:name="android.intent.category.DEFAULT" />
             </intent-filter>
         </activity>

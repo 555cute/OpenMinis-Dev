@@ -214,8 +214,8 @@ class DebugRPCHandler(private val context: Context) {
             put("totalLogSize", AppLogger.totalSize())
             put("diskUsage", JSONObject().apply {
                 put("filesDir", dirSize(filesDir))
-                put("sessions", dirSize(File(filesDir, "minis-sessions")))
-                put("global", dirSize(File(filesDir, "minis-global")))
+                put("sessions", dirSize(File(filesDir, "minis-autocompact-sessions")))
+                put("global", dirSize(File(filesDir, "minis-autocompact-global")))
             })
         }
     }
@@ -314,7 +314,7 @@ class DebugRPCHandler(private val context: Context) {
      * were written into a session we no longer have mounted.
      */
     private fun handleRawLS(params: JSONObject): Any {
-        val subPath = params.optString("path", "minis-sessions")
+        val subPath = params.optString("path", "minis-autocompact-sessions")
         if (subPath.contains("..")) throw RPCException(-32602, "Invalid path: '..' not allowed")
         val recursive = params.optBoolean("recursive", true)
         val maxDepth = params.optInt("maxDepth", 4)

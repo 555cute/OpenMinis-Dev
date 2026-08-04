@@ -33,11 +33,11 @@ android {
     compileSdk = 36
 
     defaultConfig {
-        applicationId = "com.openminis.app"
+        applicationId = "com.openminis.app.autocompact"
         minSdk = 26
         targetSdk = 35
-        versionCode = 20
-        versionName = "0.20-preview"
+        versionCode = 23
+        versionName = "0.23-autocompact"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 

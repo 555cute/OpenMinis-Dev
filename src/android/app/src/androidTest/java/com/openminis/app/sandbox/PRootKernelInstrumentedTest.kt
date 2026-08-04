@@ -70,15 +70,15 @@ class PRootKernelInstrumentedTest {
 
     @Test
     fun addBindMountStoresMapping() {
-        PRootKernel.addBindMount("/var/minis/workspace", "/data/host/workspace")
-        assertEquals("/data/host/workspace", PRootKernel.bindMounts["/var/minis/workspace"])
+        PRootKernel.addBindMount("/var/minis-autocompact/workspace", "/data/host/workspace")
+        assertEquals("/data/host/workspace", PRootKernel.bindMounts["/var/minis-autocompact/workspace"])
     }
 
     @Test
     fun removeBindMountRemovesMapping() {
-        PRootKernel.addBindMount("/var/minis/workspace", "/data/host/workspace")
-        PRootKernel.removeBindMount("/var/minis/workspace")
-        assertNull(PRootKernel.bindMounts["/var/minis/workspace"])
+        PRootKernel.addBindMount("/var/minis-autocompact/workspace", "/data/host/workspace")
+        PRootKernel.removeBindMount("/var/minis-autocompact/workspace")
+        assertNull(PRootKernel.bindMounts["/var/minis-autocompact/workspace"])
     }
 
     @Test
@@ -118,7 +118,7 @@ class PRootKernelInstrumentedTest {
         // Should have -r flag with rootfs
         val rIndex = cmd.indexOf("-r")
         assertTrue("Should contain -r flag", rIndex >= 0)
-        assertTrue("Rootfs path should follow -r", cmd[rIndex + 1].contains("alpine-rootfs"))
+        assertTrue("Rootfs path should follow -r", cmd[rIndex + 1].contains("alpine-rootfs-autocompact"))
 
         // Should bind /dev, /proc, /sys
         assertTrue("Should bind /dev", cmd.contains("/dev"))
@@ -145,12 +145,12 @@ class PRootKernelInstrumentedTest {
         }
         PRootKernel.boot(context)
 
-        PRootKernel.addBindMount("/var/minis/workspace", "/data/user/0/com.openminis.app/workspace")
+        PRootKernel.addBindMount("/var/minis-autocompact/workspace", "/data/user/0/com.openminis.app.autocompact/workspace")
 
-        val cmd = PRootKernel.buildProotCommand("ls /var/minis/workspace")
+        val cmd = PRootKernel.buildProotCommand("ls /var/minis-autocompact/workspace")
 
         // Should contain -b host:linux format
-        val bindStr = "/data/user/0/com.openminis.app/workspace:/var/minis/workspace"
+        val bindStr = "/data/user/0/com.openminis.app.autocompact/workspace:/var/minis-autocompact/workspace"
         assertTrue("Should contain bind mount arg", cmd.contains(bindStr))
     }
 
@@ -180,18 +180,18 @@ class PRootKernelInstrumentedTest {
 
     @Test
     fun resolveHostPathMatchesExactMount() {
-        PRootKernel.addBindMount("/var/minis/workspace", "/host/workspace")
+        PRootKernel.addBindMount("/var/minis-autocompact/workspace", "/host/workspace")
 
-        val result = PRootKernel.resolveHostPath("/var/minis/workspace")
+        val result = PRootKernel.resolveHostPath("/var/minis-autocompact/workspace")
         assertNotNull(result)
         assertEquals("/host/workspace", result!!.path)
     }
 
     @Test
     fun resolveHostPathMatchesSubpath() {
-        PRootKernel.addBindMount("/var/minis/workspace", "/host/workspace")
+        PRootKernel.addBindMount("/var/minis-autocompact/workspace", "/host/workspace")
 
-        val result = PRootKernel.resolveHostPath("/var/minis/workspace/file.txt")
+        val result = PRootKernel.resolveHostPath("/var/minis-autocompact/workspace/file.txt")
         assertNotNull(result)
         assertEquals("/host/workspace/file.txt", result!!.path)
     }
@@ -199,20 +199,20 @@ class PRootKernelInstrumentedTest {
     @Test
     fun resolveHostPathUsesLongestPrefixMatch() {
         PRootKernel.addBindMount("/var", "/host/var")
-        PRootKernel.addBindMount("/var/minis/workspace", "/host/workspace")
+        PRootKernel.addBindMount("/var/minis-autocompact/workspace", "/host/workspace")
 
-        val result = PRootKernel.resolveHostPath("/var/minis/workspace/deep/file.txt")
+        val result = PRootKernel.resolveHostPath("/var/minis-autocompact/workspace/deep/file.txt")
         assertNotNull(result)
         assertEquals("/host/workspace/deep/file.txt", result!!.path)
     }
 
     @Test
     fun resolveHostPathDoesNotMatchPartialPrefix() {
-        PRootKernel.addBindMount("/var/minis/work", "/host/work")
+        PRootKernel.addBindMount("/var/minis-autocompact/work", "/host/work")
 
-        // "/var/minis/workspace" should NOT match "/var/minis/work" (no / after "work")
-        val result = PRootKernel.resolveHostPath("/var/minis/workspace/file.txt")
-        // Should fallback to rootfs or null, not match /var/minis/work
+        // "/var/minis-autocompact/workspace" should NOT match "/var/minis-autocompact/work" (no / after "work")
+        val result = PRootKernel.resolveHostPath("/var/minis-autocompact/workspace/file.txt")
+        // Should fallback to rootfs or null, not match /var/minis-autocompact/work
         assertNotEquals("/host/work/space/file.txt", result?.path ?: "")
     }
 
@@ -234,7 +234,7 @@ class PRootKernelInstrumentedTest {
         // No bind mounts → should resolve relative to rootfsDir
         val result = PRootKernel.resolveHostPath("/etc/resolv.conf")
         assertNotNull(result)
-        assertTrue("Should resolve inside rootfs", result!!.path.contains("alpine-rootfs"))
+        assertTrue("Should resolve inside rootfs", result!!.path.contains("alpine-rootfs-autocompact"))
         assertTrue("Should end with etc/resolv.conf", result.path.endsWith("etc/resolv.conf"))
     }
 

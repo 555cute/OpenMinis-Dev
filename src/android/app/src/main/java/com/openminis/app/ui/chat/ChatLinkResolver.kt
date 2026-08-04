@@ -13,8 +13,8 @@ import java.io.File
  * Decides what should happen when a link inside chat markdown is tapped.
  *
  * Routing order:
- *  1. Recognized minis:// deep-link action  → DeepLink (delegated to MainActivity via Intent.ACTION_VIEW)
- *  2. minis://<sandbox path>, file://, or absolute /var/minis|/root path → SandboxFile
+ *  1. Recognized minis-ac:// deep-link action  → DeepLink (delegated to MainActivity via Intent.ACTION_VIEW)
+ *  2. minis-ac://<sandbox path>, file://, or absolute /var/minis-autocompact|/root path → SandboxFile
  *  3. Non-http(s) external schemes (intent://, mailto:, tel:, geo:, …)   → ExternalApp
  *  4. Anything else (http(s), about, file)                                → Web
  */
@@ -34,9 +34,9 @@ object ChatLinkResolver {
         val uri = runCatching { trimmed.toUri() }.getOrNull()
         val scheme = uri?.scheme?.lowercase()
 
-        // 1. minis:// deep links — only branch out when the URL maps to a known action,
+        // 1. minis-ac:// deep links — only branch out when the URL maps to a known action,
         //    otherwise fall through to sandbox-path handling.
-        if (scheme == "minis") {
+        if (scheme == "minis-ac") {
             val action = DeepLinkHandler.parse(uri)
             if (action !is DeepLinkAction.Unknown) {
                 return ChatLinkAction.DeepLink(action)
@@ -70,10 +70,10 @@ object ChatLinkResolver {
     /**
      * Map a chat link to a host File when it points into the sandbox, else null.
      * Accepts:
-     *   minis://attachments/foo.png        → /var/minis/attachments/foo.png
-     *   minis:///var/minis/workspace/x.csv → /var/minis/workspace/x.csv (absolute)
+     *   minis-ac://attachments/foo.png        → /var/minis-autocompact/attachments/foo.png
+     *   minis-ac:///var/minis-autocompact/workspace/x.csv → /var/minis-autocompact/workspace/x.csv (absolute)
      *   file:///path/to/file               → /path/to/file
-     *   /var/minis/workspace/x.csv         → resolved via bind mount
+     *   /var/minis-autocompact/workspace/x.csv         → resolved via bind mount
      *   /root/whatever                     → resolved relative to rootfs
      */
     private fun resolveSandboxFile(
@@ -89,13 +89,13 @@ object ChatLinkResolver {
                 PRootKernel.resolveHostPath(linuxPath)
             }
         return when (scheme) {
-            "minis" -> {
+            "minis-ac" -> {
                 // Keep '#' — attachment filenames legitimately contain it.
-                // `minis://` URLs don't use fragments, so stripping at '#'
+                // `minis-ac://` URLs don't use fragments, so stripping at '#'
                 // would truncate filenames like `foo #China.mp4`.
-                val stripped = raw.removePrefix("minis://").substringBefore('?')
+                val stripped = raw.removePrefix("minis-ac://").substringBefore('?')
                 val decoded = runCatching { java.net.URLDecoder.decode(stripped, "UTF-8") }.getOrDefault(stripped)
-                val linuxPath = if (decoded.startsWith("/")) decoded else "/var/minis/$decoded"
+                val linuxPath = if (decoded.startsWith("/")) decoded else "/var/minis-autocompact/$decoded"
                 lookup(linuxPath)
             }
             "file" -> {

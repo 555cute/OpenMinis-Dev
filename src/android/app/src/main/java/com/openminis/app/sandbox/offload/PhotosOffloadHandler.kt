@@ -455,7 +455,7 @@ class PhotosOffloadHandler(private val context: Context) : NativeOffloadHandler 
     /**
      * Copy the asset bytes to the host filesystem at
      * `<filesDir>/photos-export/<id>_<safe-name>.<ext>` and report the
-     * absolute host path. iOS uses the Linux-mounted `/var/minis/offloads/`
+     * absolute host path. iOS uses the Linux-mounted `/var/minis-autocompact/offloads/`
      * but Android's offloads dir is bind-mounted per session and the
      * handler doesn't see the session id — we report `host_path` instead
      * so the agent has a concrete location even if Linux-side access
@@ -1000,7 +1000,7 @@ Android edge cases vs apple-photos:
     since the CLI sandbox can't show the system consent dialog.
   - Export writes to host filesDir; the JSON returns `host_path`. The
     Linux-side bind-mount path varies per session, so we don't mirror
-    iOS `data.path = /var/minis/offloads/...` exactly.
+    iOS `data.path = /var/minis-autocompact/offloads/...` exactly.
 
 Errors return JSON: {"error":"...","message":"..."}.
 """

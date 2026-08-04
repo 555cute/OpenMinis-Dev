@@ -1,4 +1,4 @@
-name: Build Auto Context Compact APKs
+name: Build Isolated Auto Context Compact APKs
 
 on:
   workflow_dispatch:
@@ -49,7 +49,7 @@ jobs:
             src/android/app/src/main/assets/alpine-minirootfs.tar.gz
             src/android/app/src/main/assets/proot-aarch64
             src/android/app/src/main/jniLibs/arm64-v8a/libproot.so
-          key: android-auto-compact-${{ runner.os }}-${{ hashFiles('deps/build_proot.sh', 'deps/proot/**', 'deps/talloc/**', 'scripts/prepare_android_sandbox.sh') }}
+          key: android-auto-compact-isolated-${{ runner.os }}-${{ hashFiles('deps/build_proot.sh', 'deps/proot/**', 'deps/talloc/**', 'scripts/prepare_android_sandbox.sh') }}
 
       - name: Prepare customization
         run: cp src/android/app/provider-customization.properties.example src/android/app/provider-customization.properties
@@ -68,14 +68,14 @@ jobs:
       - name: Collect universal and ABI APKs
         run: |
           mkdir -p dist
-          cp src/android/app/build/outputs/apk/release/app-release.apk dist/Minis-AutoCompact-universal.apk
-          cp src/android/app/build/outputs/apk/release/app-release.apk dist/Minis-AutoCompact-arm64-v8a.apk
+          cp src/android/app/build/outputs/apk/release/app-release.apk dist/Minis-AutoCompact-Isolated-universal.apk
+          cp src/android/app/build/outputs/apk/release/app-release.apk dist/Minis-AutoCompact-Isolated-arm64-v8a.apk
           sha256sum dist/*.apk > dist/SHA256SUMS.txt
 
       - name: Upload APK artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: Minis-AutoCompact-APKs
+          name: Minis-AutoCompact-Isolated-APKs
           path: dist/
           if-no-files-found: error
           retention-days: 30

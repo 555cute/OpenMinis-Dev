@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">Minis</string>
+    <string name="app_name">Minis·AutoCompact</string>
     <string name="new_chat">새 채팅</string>
     <string name="settings">설정</string>
     <string name="providers">AI 공급자</string>
@@ -802,7 +802,7 @@
 
     <!-- T235 — 공유 폴더 (고정: 공유 / 스킬 / 메모리) -->
     <string name="settings_shared_folders">공유 폴더</string>
-    <string name="settings_shared_folders_subtitle">/var/minis 의 공유, 스킬, 메모리 둘러보기</string>
+    <string name="settings_shared_folders_subtitle">/var/minis-autocompact 의 공유, 스킬, 메모리 둘러보기</string>
     <string name="shared_folders_title">공유 폴더</string>
     <string name="shared_folders_info_banner">이 디렉터리는 Linux 샌드박스 안에서 사용됩니다. Skills와 Memory는 AI 에이전트 도구가 관리하므로 수동으로 수정하지 마세요.</string>
     <string name="shared_folder_name_shared">공유</string>
@@ -813,16 +813,16 @@
 
     <!-- T219-2 — 외부 폴더 마운트 -->
     <string name="settings_mount_external_folders">외부 폴더 마운트</string>
-    <string name="settings_mount_external_folders_subtitle">선택한 폴더를 /var/minis/mounts/ 에 바인드</string>
+    <string name="settings_mount_external_folders_subtitle">선택한 폴더를 /var/minis-autocompact/mounts/ 에 바인드</string>
     <string name="mount_folders_title">마운트된 폴더</string>
-    <string name="mount_folders_info_banner">선택한 폴더는 /var/minis/mounts/&lt;name&gt; 에 바인드 마운트됩니다. 한 번에 최대 10개까지 마운트할 수 있습니다.</string>
+    <string name="mount_folders_info_banner">선택한 폴더는 /var/minis-autocompact/mounts/&lt;name&gt; 에 바인드 마운트됩니다. 한 번에 최대 10개까지 마운트할 수 있습니다.</string>
     <string name="mount_folders_empty_title">마운트된 폴더 없음</string>
     <string name="mount_folders_empty_subtitle">+ 를 눌러 폴더를 선택하세요</string>
     <string name="mount_folders_limit_reached">마운트 한도(10) 도달</string>
     <string name="mount_add_dialog_title">마운트 추가</string>
     <string name="mount_add_source_path">원본 경로</string>
     <string name="mount_add_name_label">마운트 이름</string>
-    <string name="mount_add_name_hint">/var/minis/mounts/ 아래의 폴더 이름이 됩니다</string>
+    <string name="mount_add_name_hint">/var/minis-autocompact/mounts/ 아래의 폴더 이름이 됩니다</string>
     <string name="mount_add_allow_writes">쓰기 허용</string>
     <string name="mount_add_allow_writes_desc">끄면 file_write/file_edit 도구가 쓰기를 거부하지만 셸은 여전히 우회할 수 있습니다.</string>
     <string name="mount_add_confirm">추가</string>
@@ -965,7 +965,7 @@
     <string name="mcp_add">MCP 서버 추가</string>
     <string name="mcp_edit">MCP 서버 편집</string>
     <string name="mcp_section_servers">서버</string>
-    <string name="mcp_section_footer">MCP 서버를 사용하면 에이전트가 minis-mcp-cli를 통해 외부 도구를 호출할 수 있습니다. 구성은 /var/minis/mcp-servers/servers.json에 저장됩니다(Claude Desktop 호환).</string>
+    <string name="mcp_section_footer">MCP 서버를 사용하면 에이전트가 minis-mcp-cli를 통해 외부 도구를 호출할 수 있습니다. 구성은 /var/minis-autocompact/mcp-servers/servers.json에 저장됩니다(Claude Desktop 호환).</string>
     <string name="mcp_empty_title">MCP 서버 없음</string>
     <string name="mcp_empty_action">+ 버튼으로 서버를 추가하세요.</string>
     <string name="mcp_transport_http">HTTP</string>

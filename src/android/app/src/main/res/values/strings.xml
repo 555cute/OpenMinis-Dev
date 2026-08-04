@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">Minis</string>
+    <string name="app_name">Minis·AutoCompact</string>
     <string name="new_chat">New Chat</string>
     <string name="settings">Settings</string>
     <string name="providers">Providers</string>
@@ -156,7 +156,7 @@
     <string name="mcp_add">Add MCP Server</string>
     <string name="mcp_edit">Edit MCP Server</string>
     <string name="mcp_section_servers">Servers</string>
-    <string name="mcp_section_footer">MCP servers let the agent call external tools via minis-mcp-cli. Configs are stored in /var/minis/mcp-servers/servers.json (Claude Desktop compatible).</string>
+    <string name="mcp_section_footer">MCP servers let the agent call external tools via minis-mcp-cli. Configs are stored in /var/minis-autocompact/mcp-servers/servers.json (Claude Desktop compatible).</string>
     <string name="mcp_empty_title">No MCP servers</string>
     <string name="mcp_empty_action">Add a server with the + button.</string>
     <string name="mcp_transport_http">HTTP</string>
@@ -1152,7 +1152,7 @@
 
     <!-- T235 — Shared Folders (fixed: Shared / Skills / Memory) -->
     <string name="settings_shared_folders">Shared Folders</string>
-    <string name="settings_shared_folders_subtitle">Browse /var/minis shared, skills, and memory</string>
+    <string name="settings_shared_folders_subtitle">Browse /var/minis-autocompact shared, skills, and memory</string>
     <string name="shared_folders_title">Shared Folders</string>
     <string name="shared_folders_info_banner">These directories are visible inside the Linux sandbox. Skills and Memory are maintained by AI agent tools — do not edit manually.</string>
     <string name="shared_folder_name_shared">Shared</string>
@@ -1163,16 +1163,16 @@
 
     <!-- T219-2 — Mount External Folders settings UI -->
     <string name="settings_mount_external_folders">Mount External Folders</string>
-    <string name="settings_mount_external_folders_subtitle">Bind picked folders into /var/minis/mounts/</string>
+    <string name="settings_mount_external_folders_subtitle">Bind picked folders into /var/minis-autocompact/mounts/</string>
     <string name="mount_folders_title">Mounted Folders</string>
-    <string name="mount_folders_info_banner">Picked folders are bind-mounted at /var/minis/mounts/&lt;name&gt;. Up to 10 folders can be mounted at a time.</string>
+    <string name="mount_folders_info_banner">Picked folders are bind-mounted at /var/minis-autocompact/mounts/&lt;name&gt;. Up to 10 folders can be mounted at a time.</string>
     <string name="mount_folders_empty_title">No mounted folders</string>
     <string name="mount_folders_empty_subtitle">Tap + to pick a folder</string>
     <string name="mount_folders_limit_reached">Mount limit reached (10)</string>
     <string name="mount_add_dialog_title">Add Mount</string>
     <string name="mount_add_source_path">Source path</string>
     <string name="mount_add_name_label">Mount name</string>
-    <string name="mount_add_name_hint">This will be the folder name under /var/minis/mounts/</string>
+    <string name="mount_add_name_hint">This will be the folder name under /var/minis-autocompact/mounts/</string>
     <string name="mount_add_allow_writes">Allow writes</string>
     <string name="mount_add_allow_writes_desc">When off, file_write/file_edit tools refuse writes; the shell can still bypass this.</string>
     <string name="mount_add_confirm">Add</string>

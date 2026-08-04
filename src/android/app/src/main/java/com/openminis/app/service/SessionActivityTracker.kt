@@ -124,7 +124,7 @@ object SessionActivityTracker {
      * [T-android-overlay-reply-status-34599] Session ID associated with
      * [lastReplyExcerpt] and the current activity. Drives the
      * "tap-overlay → open chat" intent in [ToolOverlayController] by
-     * synthesising a `minis://session/<id>` deep-link the existing
+     * synthesising a `minis-ac://session/<id>` deep-link the existing
      * DeepLinkHandler already understands.
      */
     private val _currentSessionId = MutableStateFlow<String?>(null)

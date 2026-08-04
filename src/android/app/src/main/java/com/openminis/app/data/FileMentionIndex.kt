@@ -39,11 +39,15 @@ import java.util.UUID
  */
 class FileMentionIndex(
     private val filesDir: File,
+    private val sessionFilesDir: File = filesDir,
     private val mountsProvider: () -> List<MountEntry> = { emptyList() },
     private val cacheTtlMs: Long = DEFAULT_CACHE_TTL_MS,
     private val scope: CoroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.IO),
 ) {
-    constructor(context: Context) : this(File(context.filesDir, "minis-global"))
+    constructor(context: Context) : this(
+        File(context.filesDir, "minis-autocompact-global"),
+        File(context.filesDir, "minis-autocompact-sessions"),
+    )
 
     /**
      * Scope priorities — `order` doubles as the empty-query default sort key
@@ -77,7 +81,7 @@ class FileMentionIndex(
         val isDirectory: Boolean,
     ) {
         val basename: String get() = linuxPath.substringAfterLast('/').ifEmpty { linuxPath }
-        val displayPath: String get() = linuxPath.removePrefix("/var/minis/")
+        val displayPath: String get() = linuxPath.removePrefix("/var/minis-autocompact/")
     }
 
     private val _entries = MutableStateFlow<List<Entry>>(emptyList())
@@ -120,10 +124,10 @@ class FileMentionIndex(
             layerEntries(
                 sessionId = sessionId,
                 layers = listOf(
-                    File(filesDir, "workspace/$sessionId") to Scope.WORKSPACE,
-                    File(filesDir, "attachments/$sessionId") to Scope.ATTACHMENTS,
+                    File(sessionFilesDir, "$sessionId/workspace") to Scope.WORKSPACE,
+                    File(sessionFilesDir, "$sessionId/attachments") to Scope.ATTACHMENTS,
                 ),
-                linuxRootFor = { scope -> "/var/minis/${scope.displayLabel}/$sessionId" },
+                linuxRootFor = { scope -> "/var/minis-autocompact/${scope.displayLabel}/$sessionId" },
             ).let { newBatch ->
                 collected += newBatch
                 publish(token, collected)
@@ -137,7 +141,7 @@ class FileMentionIndex(
                     File(filesDir, "skills") to Scope.SKILLS,
                     File(filesDir, "memory") to Scope.MEMORY,
                 ),
-                linuxRootFor = { scope -> "/var/minis/${scope.displayLabel}" },
+                linuxRootFor = { scope -> "/var/minis-autocompact/${scope.displayLabel}" },
             ).let { newBatch ->
                 collected += newBatch
                 publish(token, collected)
@@ -149,10 +153,10 @@ class FileMentionIndex(
             for (mount in mountsProvider()) {
                 if (currentScanToken != token) return
                 // T219: align with PRoot bind path + iOS prompt wording.
-                // Each mount lives under /var/minis/mounts/<name> inside the
+                // Each mount lives under /var/minis-autocompact/mounts/<name> inside the
                 // sandbox; inserting that exact path keeps the agent's mental
                 // model coherent across @-mention, prompt copy, and shell.
-                val mountLinuxRoot = "/var/minis/mounts/${mount.name}"
+                val mountLinuxRoot = "/var/minis-autocompact/mounts/${mount.name}"
                 // Always inject the mount root so `@<name>` works even when budget is gone.
                 collected += Entry(
                     linuxPath = mountLinuxRoot,
@@ -353,7 +357,7 @@ class FileMentionIndex(
     /**
      * Substring search across path components — the same path may match
      * even when the basename doesn't (e.g. typing `@mounts` finds files
-     * inside `/var/minis/mounts/...`).
+     * inside `/var/minis-autocompact/mounts/...`).
      */
     private fun anyPathComponentMatches(path: String, query: String): Boolean {
         return path.split('/').any { it.contains(query) }
@@ -361,17 +365,17 @@ class FileMentionIndex(
 
     /**
      * Is this entry the immediate child of a scope root? e.g.
-     * `/var/minis/skills/foo`, `/var/minis/mounts/bar`,
-     * `/var/minis/shared/baz`. These first-class `@`-targets get a +50
+     * `/var/minis-autocompact/skills/foo`, `/var/minis-autocompact/mounts/bar`,
+     * `/var/minis-autocompact/shared/baz`. These first-class `@`-targets get a +50
      * ranking bonus so typing `@foo` surfaces the whole skill directory
      * above its individual files (mirrors iOS).
      */
     private fun isTopLevelScopeRoot(entry: Entry): Boolean {
         if (!entry.isDirectory) return false
         val tops = listOf(
-            "/var/minis/skills/",
-            "/var/minis/mounts/",
-            "/var/minis/shared/",
+            "/var/minis-autocompact/skills/",
+            "/var/minis-autocompact/mounts/",
+            "/var/minis-autocompact/shared/",
         )
         for (top in tops) {
             if (entry.linuxPath.startsWith(top)) {

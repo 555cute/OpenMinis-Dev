@@ -12,7 +12,7 @@ import java.io.File
 import java.io.FileNotFoundException
 
 /**
- * Exposes `<filesDir>/minis-global/{memory,skills,shared}` to the system
+ * Exposes `<filesDir>/minis-autocompact-global/{memory,skills,shared}` to the system
  * Files app as a storage root. Mirrors iOS `FileProviderExtension`
  * (spec_FileMount §1). Runs in the main app process — no IPC / no
  * independent extension target needed on Android.
@@ -27,7 +27,7 @@ import java.io.FileNotFoundException
  * gets its own cleanup commit, add:
  * ```xml
  * <provider android:name=".providers.MinisDocumentsProvider"
- *     android:authorities="com.openminis.minis.documents"
+ *     android:authorities="com.openminis.app.autocompact.documents"
  *     android:exported="true"
  *     android:grantUriPermissions="true"
  *     android:permission="android.permission.MANAGE_DOCUMENTS">
@@ -42,7 +42,7 @@ import java.io.FileNotFoundException
 class MinisDocumentsProvider : DocumentsProvider() {
 
     companion object {
-        const val AUTHORITY = "com.openminis.minis.documents"
+        const val AUTHORITY = "com.openminis.app.autocompact.documents"
         private const val ROOT_ID = "minis-root"
         private const val ROOT_DOC_ID = ""        // empty = providerRoot
         private val TOP_LEVEL = listOf("memory", "skills", "shared")
@@ -78,7 +78,7 @@ class MinisDocumentsProvider : DocumentsProvider() {
 
     private fun providerRoot(): File {
         val ctx = context ?: throw IllegalStateException("Provider has no context")
-        return File(ctx.filesDir, "minis-global").apply { mkdirs() }
+        return File(ctx.filesDir, "minis-autocompact-global").apply { mkdirs() }
     }
 
     private fun resolveDoc(documentId: String): File {

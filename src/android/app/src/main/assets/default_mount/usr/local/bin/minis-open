@@ -1,5 +1,5 @@
 #!/bin/sh
-# minis-open — MinisApp URL interceptor for the PRoot sandbox.
+# minis-open — Minis AutoCompact URL interceptor for the isolated PRoot sandbox.
 #
 # Stands in for xdg-open / sensible-browser / www-browser / BROWSER, and also
 # doubles as the in-app preview opener for chat resources. Any argument is
@@ -7,8 +7,8 @@
 # host parses and routes to the appropriate built-in viewer:
 #
 #   * http:// https:// about:*                 → in-app WebView preview
-#   * /var/minis/<host>/<path>  (absolute)     → converted to minis://<host>/<path>
-#     minis://attachments/...  minis://workspace/...  minis://shared/... etc.
+#   * /var/minis-autocompact/<host>/<path> (absolute) → converted to minis-ac://<host>/<path>
+#     minis-ac://attachments/...  minis-ac://workspace/...  minis-ac://shared/... etc.
 #                                              → routed by extension:
 #                                                 images → image viewer
 #                                                 markdown → markdown preview
@@ -39,33 +39,33 @@ emit() {
             emit_marker "$1"
             printf 'Opened in Minis browser: %s\n' "$1"
             ;;
-        minis://*)
-            # Already a minis:// URL — pass through.
+        minis-ac://*)
+            # Already a minis-ac:// URL — pass through.
             emit_marker "$1"
-            printf 'Opened in Minis preview: %s\n' "$1"
+            printf 'Opened in Minis AutoCompact preview: %s\n' "$1"
             ;;
-        /var/minis/*)
-            # Convert /var/minis/<host>/<path> → minis://<host>/<path>
+        /var/minis-autocompact/*)
+            # Convert /var/minis-autocompact/<host>/<path> → minis-ac://<host>/<path>
             # so the host can resolve it to the real sandbox location and
             # pick the right in-app preview by extension.
-            rel="${1#/var/minis/}"
+            rel="${1#/var/minis-autocompact/}"
             case "$rel" in
                 */*)
                     host="${rel%%/*}"
                     path="${rel#*/}"
-                    emit_marker "minis://$host/$path"
-                    printf 'Opened in Minis preview: minis://%s/%s\n' "$host" "$path"
+                    emit_marker "minis-ac://$host/$path"
+                    printf 'Opened in Minis AutoCompact preview: minis-ac://%s/%s\n' "$host" "$path"
                     ;;
                 *)
-                    # e.g. /var/minis/workspace with no trailing path — a bare
-                    # directory. Not previewable; treat as non-URL.
+                    # e.g. /var/minis-autocompact/workspace with no trailing
+                    # path — a bare directory. Not previewable; treat as
                     printf 'minis-open: not a previewable resource: %s\n' "$1" >&2
                     return 0
                     ;;
             esac
             ;;
         *)
-            # Non-URL, non-/var/minis path: print a hint but don't fail — mimic
+            # Non-URL, non-/var/minis-autocompact path: print a hint but don't
             # xdg-open best-effort so shell scripts that chain it don't abort.
             printf 'minis-open: not a URL or chat resource, ignoring: %s\n' "$1" >&2
             return 0
@@ -75,7 +75,7 @@ emit() {
 
 if [ $# -eq 0 ]; then
     echo "Usage: minis-open <url-or-path>" >&2
-    echo "  url-or-path: http(s):// URL, minis:// URL, or /var/minis/<host>/<path>" >&2
+    echo "  url-or-path: http(s):// URL, minis-ac:// URL, or /var/minis-autocompact/<host>/<path>" >&2
     exit 1
 fi
 

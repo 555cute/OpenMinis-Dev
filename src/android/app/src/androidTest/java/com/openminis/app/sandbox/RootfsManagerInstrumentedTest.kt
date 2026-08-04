@@ -93,12 +93,12 @@ class RootfsManagerInstrumentedTest {
         val archFile = File(manager.rootfsDir, ".arch")
         assertEquals("aarch64", archFile.readText().trim())
 
-        // Verify /var/minis subdirs created
+        // Verify /var/minis-autocompact subdirs created
         val expectedDirs = listOf("attachments", "offloads", "workspace", "skills", "memory")
         for (subdir in expectedDirs) {
-            val dir = File(manager.rootfsDir, "var/minis/$subdir")
-            assertTrue("var/minis/$subdir should exist", dir.exists())
-            assertTrue("var/minis/$subdir should be directory", dir.isDirectory)
+            val dir = File(manager.rootfsDir, "var/minis-autocompact/$subdir")
+            assertTrue("var/minis-autocompact/$subdir should exist", dir.exists())
+            assertTrue("var/minis-autocompact/$subdir should be directory", dir.isDirectory)
         }
 
         // Verify resolv.conf
@@ -184,7 +184,7 @@ class RootfsManagerInstrumentedTest {
         val sessionId = "test-session-${System.nanoTime()}"
         manager.ensureSessionDirs(sessionId)
 
-        val sessionBase = File(context.filesDir, "minis-sessions/$sessionId")
+        val sessionBase = File(context.filesDir, "minis-autocompact-sessions/$sessionId")
         assertTrue(sessionBase.exists())
 
         val expectedSubdirs = listOf("attachments", "offloads", "workspace", "browser")
@@ -204,7 +204,7 @@ class RootfsManagerInstrumentedTest {
         manager.ensureSessionDirs(sessionId)
         manager.ensureSessionDirs(sessionId) // Should not throw
 
-        val sessionBase = File(context.filesDir, "minis-sessions/$sessionId")
+        val sessionBase = File(context.filesDir, "minis-autocompact-sessions/$sessionId")
         assertTrue(sessionBase.exists())
         sessionBase.deleteRecursively()
     }

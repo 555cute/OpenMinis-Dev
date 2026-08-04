@@ -387,21 +387,21 @@ class BrowserUseManager(
                 view: WebView, request: WebResourceRequest
             ): android.webkit.WebResourceResponse? {
                 val url = request.url ?: return null
-                if (url.scheme != "minis") return null
+                if (url.scheme != "minis-ac") return null
                 return interceptMinisURL(url)
             }
         }
     }
 
-    /** Resolve minis:// URLs to local workspace files. */
+    /** Resolve minis-ac:// URLs to local workspace files. */
     private fun interceptMinisURL(uri: android.net.Uri): android.webkit.WebResourceResponse? {
         try {
-            // minis://workspace/foo.html → /var/minis/workspace/foo.html, then
+            // minis-ac://workspace/foo.html → /var/minis-autocompact/workspace/foo.html, then
             // resolve to the host file via PRoot bind mounts (per-session
-            // workspace lives under filesDir/minis-sessions/<sid>/workspace/).
+            // workspace lives under filesDir/minis-autocompact-sessions/<sid>/workspace/).
             val host = uri.host ?: return null
             val path = uri.path ?: ""
-            val linuxPath = "/var/minis/$host$path"
+            val linuxPath = "/var/minis-autocompact/$host$path"
             val localFile = com.openminis.app.sandbox.PRootKernel.resolveHostPath(linuxPath)
             if (localFile == null || !localFile.exists() || !localFile.isFile) {
                 return android.webkit.WebResourceResponse("text/plain", "UTF-8", 404, "Not Found",
@@ -412,7 +412,7 @@ class BrowserUseManager(
             // the agent's session viewport when the page doesn't declare one.
             // Without this, Android WebView falls back to a hardcoded 980 CSS
             // px width regardless of the WebView's measured size, making
-            // `set_viewport` look like a no-op for `minis://` HTML pages.
+            // `set_viewport` look like a no-op for `minis-ac://` HTML pages.
             val stream = if (mimeType == "text/html" && lastAppliedViewport != null) {
                 ensureMetaViewport(localFile.readBytes(), lastAppliedViewport!!.first)
             } else {
@@ -422,7 +422,7 @@ class BrowserUseManager(
                 mapOf("Access-Control-Allow-Origin" to "*"),
                 stream)
         } catch (e: Exception) {
-            Log.w(TAG, "minis:// intercept error: ${e.message}")
+            Log.w(TAG, "minis-ac:// intercept error: ${e.message}")
             return null
         }
     }
@@ -574,7 +574,7 @@ class BrowserUseManager(
 
         withContext(Dispatchers.Main) {
             // Re-assert the last applied viewport before loadUrl. Intercepted
-            // navigations (minis://) served via shouldInterceptRequest skip
+            // navigations (minis-ac://) served via shouldInterceptRequest skip
             // the layout pass that a real network load triggers, so without
             // this the page reports Android WebView's 980px no-meta fallback
             // even when a session override (e.g. 960x540) is active.
@@ -1086,7 +1086,7 @@ class BrowserUseManager(
     /**
      * Last CSS-pixel viewport applied via [applyViewport]. Used so [navigate]
      * can re-assert the same size before `loadUrl()` — intercepted
-     * (`minis://`) loads skip WebView's measure pass, otherwise stranding the
+     * (`minis-ac://`) loads skip WebView's measure pass, otherwise stranding the
      * page at the 980px no-meta fallback.
      */
     private var lastAppliedViewport: Pair<Int, Int>? = null
@@ -1615,7 +1615,7 @@ class BrowserUseManager(
         // already finished loading (readyState === 'complete') is almost
         // always stable — confirm with two samples 50ms apart and return
         // without paying the 200ms poll interval. Keeps trivial static
-        // pages (e.g. minis:// docs) fast at any budget.
+        // pages (e.g. minis-ac:// docs) fast at any budget.
         val readyState = evaluateJavascript(
             "(function(){try{return document.readyState;}catch(e){return '';}})()"
         ).trim('"')

@@ -12,8 +12,8 @@ import kotlinx.coroutines.flow.asStateFlow
  * existing link-tap handler, which in turn dispatches:
  *
  *   * `http(s)://` / `about:`  → `UrlPreviewSheet` via `LocalInAppBrowserLauncher`
- *   * `minis://<deep-link>`    → `DeepLinkHandler`
- *   * `minis://<host>/<path>`  → in-app file preview by extension
+ *   * `minis-ac://<deep-link>`    → `DeepLinkHandler`
+ *   * `minis-ac://<host>/<path>`  → in-app file preview by extension
  *
  * Whichever observer handles the URL calls [consume] so sibling observers
  * skip it. This mirrors iOS `MinisOpenURLBroker`.
@@ -51,11 +51,11 @@ object MinisOpenUrlBroker {
     /**
      * Schemes `minis-open` may emit and that the host knows how to route.
      *   * `http` / `https` / `about` → in-app WebView preview
-     *   * `minis`                    → deep link or in-app file preview
+     *   * `minis-ac`                 → deep link or in-app file preview
      */
     fun isSupportedScheme(scheme: String?): Boolean {
         val s = scheme?.lowercase() ?: return false
-        return s == "http" || s == "https" || s == "about" || s == "minis"
+        return s == "http" || s == "https" || s == "about" || s == "minis-ac"
     }
 
     /**
